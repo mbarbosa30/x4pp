@@ -24,6 +24,12 @@ const mockMessages = [
     timestamp: "2 hours ago",
     opened: false,
     replyBounty: 0.05,
+    reputation: {
+      openRate: 0.78,
+      replyRate: 0.41,
+      vouchCount: 5,
+      totalSent: 24,
+    },
   },
   {
     id: "2",
@@ -35,6 +41,12 @@ const mockMessages = [
     timeRemaining: "5h 12m",
     timestamp: "5 hours ago",
     opened: false,
+    reputation: {
+      openRate: 0.52,
+      replyRate: 0.18,
+      vouchCount: 0,
+      totalSent: 8,
+    },
   },
   {
     id: "3",
@@ -47,6 +59,12 @@ const mockMessages = [
     timestamp: "30 minutes ago",
     opened: true,
     replyBounty: 0.10,
+    reputation: {
+      openRate: 0.91,
+      replyRate: 0.67,
+      vouchCount: 12,
+      totalSent: 47,
+    },
   },
 ];
 
@@ -69,6 +87,34 @@ export default function Home() {
   const handleOpenMessage = (messageId: string) => {
     setSelectedMessage(messageId);
     setActiveTab("inbox");
+  };
+
+  const handleVouch = async (messageId: string) => {
+    const msg = mockMessages.find((m) => m.id === messageId);
+    if (!msg) return;
+
+    try {
+      // TODO: Replace with actual nullifiers from wallet/Self verification
+      const response = await fetch("/api/vouches", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          voucherNullifier: "current-user-nullifier", // Replace with actual
+          voucheeNullifier: `sender-${msg.senderName}`, // Replace with actual
+          messageId: messageId,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        console.error("Vouch failed:", error);
+        return;
+      }
+
+      console.log("Successfully vouched for", msg.senderName);
+    } catch (error) {
+      console.error("Error vouching:", error);
+    }
   };
 
   const message = mockMessages.find((m) => m.id === selectedMessage);
@@ -137,7 +183,9 @@ export default function Home() {
                     amount={message.amount}
                     timestamp={message.timestamp}
                     replyBounty={message.replyBounty}
+                    reputation={message.reputation}
                     onReply={(reply) => console.log("Reply:", reply)}
+                    onVouch={() => handleVouch(message.id)}
                     onBlock={() => console.log("Block sender")}
                     onReport={() => console.log("Report message")}
                   />

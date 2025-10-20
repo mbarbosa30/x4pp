@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Clock, DollarSign } from "lucide-react";
 import VerificationBadge from "./VerificationBadge";
+import ReputationBadge from "./ReputationBadge";
 
 interface MessageCardProps {
   id: string;
@@ -14,6 +15,12 @@ interface MessageCardProps {
   timeRemaining: string;
   opened: boolean;
   onClick?: () => void;
+  reputation?: {
+    openRate?: number;
+    replyRate?: number;
+    vouchCount?: number;
+    totalSent?: number;
+  };
 }
 
 export default function MessageCard({
@@ -25,6 +32,7 @@ export default function MessageCard({
   timeRemaining,
   opened,
   onClick,
+  reputation,
 }: MessageCardProps) {
   const [isHovered, setIsHovered] = useState(false);
 
@@ -50,11 +58,21 @@ export default function MessageCard({
         </Avatar>
 
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
             <span className={`text-sm ${!opened ? "font-semibold" : ""}`} data-testid="text-sender">
               {senderName}
             </span>
             <VerificationBadge verified={senderVerified} size="sm" />
+            {reputation && (
+              <ReputationBadge
+                openRate={reputation.openRate}
+                replyRate={reputation.replyRate}
+                vouchCount={reputation.vouchCount}
+                totalSent={reputation.totalSent}
+                showFor="sender"
+                compact={true}
+              />
+            )}
           </div>
           <p className={`text-sm text-muted-foreground truncate ${!opened ? "font-medium text-foreground" : ""}`} data-testid="text-preview">
             {messagePreview}

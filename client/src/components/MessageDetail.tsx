@@ -5,8 +5,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Reply, Ban, Flag, DollarSign, Clock } from "lucide-react";
+import { Reply, Ban, Flag, DollarSign, Clock, ThumbsUp } from "lucide-react";
 import VerificationBadge from "./VerificationBadge";
+import ReputationBadge from "./ReputationBadge";
 import { useToast } from "@/hooks/use-toast";
 
 interface MessageDetailProps {
@@ -19,6 +20,13 @@ interface MessageDetailProps {
   onReply?: (message: string) => void;
   onBlock?: () => void;
   onReport?: () => void;
+  onVouch?: () => void;
+  reputation?: {
+    openRate?: number;
+    replyRate?: number;
+    vouchCount?: number;
+    totalSent?: number;
+  };
 }
 
 export default function MessageDetail({
@@ -31,6 +39,8 @@ export default function MessageDetail({
   onReply,
   onBlock,
   onReport,
+  onVouch,
+  reputation,
 }: MessageDetailProps) {
   const [replyText, setReplyText] = useState("");
   const [showReply, setShowReply] = useState(false);
@@ -64,6 +74,16 @@ export default function MessageDetail({
     setShowReply(false);
   };
 
+  const handleVouchClick = () => {
+    if (onVouch) {
+      onVouch();
+      toast({
+        title: "Vouch sent",
+        description: `You vouched for ${senderName}`,
+      });
+    }
+  };
+
   return (
     <Card className="p-6">
       <div className="space-y-6">
@@ -75,12 +95,24 @@ export default function MessageDetail({
           </Avatar>
 
           <div className="flex-1">
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
               <span className="text-sm font-semibold" data-testid="text-sender-address">
                 {senderName}
               </span>
               <VerificationBadge verified={senderVerified} size="md" />
             </div>
+            {reputation && (
+              <div className="mb-2">
+                <ReputationBadge
+                  openRate={reputation.openRate}
+                  replyRate={reputation.replyRate}
+                  vouchCount={reputation.vouchCount}
+                  totalSent={reputation.totalSent}
+                  showFor="sender"
+                  compact={false}
+                />
+              </div>
+            )}
             <div className="flex items-center gap-3 text-sm text-muted-foreground">
               <span data-testid="text-timestamp">{timestamp}</span>
               <Badge variant="outline" className="bg-price/10 border-price/20 text-price">
@@ -113,11 +145,17 @@ export default function MessageDetail({
         <Separator />
 
         {!showReply ? (
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <Button onClick={() => setShowReply(true)} data-testid="button-reply">
               <Reply className="h-4 w-4 mr-2" />
               Reply
             </Button>
+            {onVouch && (
+              <Button variant="outline" onClick={handleVouchClick} data-testid="button-vouch">
+                <ThumbsUp className="h-4 w-4 mr-2" />
+                Vouch
+              </Button>
+            )}
             <Button variant="outline" onClick={onBlock} data-testid="button-block">
               <Ban className="h-4 w-4 mr-2" />
               Block sender
