@@ -1,0 +1,20 @@
+{
+  "name": "x4pp - Get paid for your attention",
+  "short_name": "x4pp",
+  "description": "A p2p messaging platform where senders pay for your time",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1A1A1F",
+  "theme_color": "#1A1A1F",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["social", "finance", "productivity"],
+  "lang": "en-US"
+}

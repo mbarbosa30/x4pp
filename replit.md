@@ -4,6 +4,14 @@
 
 x4pp is a peer-to-peer messaging application with an innovative "attention market" model where sending messages requires humanity verification and dynamic pricing. The app enables users to monetize their attention by setting prices for incoming messages, with built-in protections against spam through verification gates and surge pricing mechanisms.
 
+**Recent Updates (Oct 20, 2025):**
+- Rebranded to "x4pp" across all user-facing surfaces
+- Added comprehensive SEO optimization with Open Graph and Twitter Card meta tags
+- Implemented PWA manifest for installable app experience
+- Generated custom brand assets (app icon and social sharing card)
+- Added structured data (JSON-LD) for enhanced search engine understanding
+- Created sitemap.xml and robots.txt for better crawlability
+
 Key features include:
 - **Proof-of-humanity gating**: Verified humans pay discounted rates; unverified users can still send but at higher prices
 - **Dynamic surge pricing**: Message costs adjust based on inbox demand and recipient availability
