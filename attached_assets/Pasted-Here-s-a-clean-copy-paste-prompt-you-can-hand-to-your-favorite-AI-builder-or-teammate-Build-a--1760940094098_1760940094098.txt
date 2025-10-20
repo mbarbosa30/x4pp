@@ -1,0 +1,58 @@
+Here’s a clean, copy-paste prompt you can hand to your favorite AI builder or teammate:
+
+⸻
+
+Build a “p2p attention market” DM app
+
+Goal: a simple DMs/chat app where sending a message to someone requires (1) meeting humanity/eligibility conditions and (2) paying a dynamic price that rises with demand and the recipient’s chosen priorities. Use Julio’s repos as building blocks.
+
+Core idea (keep it simple)
+	•	Gate: Sender proves they’re a unique human (and optional rules like age/country) without revealing PII, or they can pay more if unverified.
+Use Julio’s Self-x402 project for “verify once, pay instantly” and its sample consumer app, vendor API, and facilitator pieces.  ￼
+	•	Price: Cost to send is dynamic (surge pricing). When a recipient’s inbox is busy, the floor price goes up; when it’s quiet, it drops. Verified humans get discounted rates; unverified pay the full amount.
+Use the x402 flow demonstrated in Self-x402 (HTTP 402 → pay → retry) to collect tiny USDC payments.  ￼
+	•	Slots: Each recipient has limited “attention slots” per hour/day. Messages compete for those slots; unopened messages auto-refund (minus a tiny fee).
+
+Minimal product (first version)
+	1.	Compose → Quote → Send
+	•	User types a message, sees a live quote (e.g., “$0.12 now; $0.01 if verified human”).
+	•	If they scan the Self QR once, they keep a cached proof for weeks. Then they pay via x402 and the message is queued/delivered.  ￼
+	2.	Recipient Inbox
+	•	Shows only the top N messages per time window (slots).
+	•	Recipient can open (funds release) or ignore (sender gets refund after expiry).
+	3.	Reply bounty (optional)
+	•	Sender can add an extra reward that’s paid only if the recipient replies within X hours.
+
+Nice touches (still simple)
+	•	Trusted UI badge: show that the DM screen is the authentic frontend (no spoofing) using Julio’s TEE-Shield-Launcher patterns (frontend hash + browser extension concept).  ￼
+	•	Privacy by design: never store documents or birthdays—only policy booleans and a nullifier to rate-limit one human ≠ many accounts (see Self-x402 docs/architecture).  ￼
+	•	ZK inspiration: if you later need “prove a fact about a secret without revealing it,” follow the approach and patterns in ShadowVault (Noir proofs of correctness without leaking secrets).  ￼
+	•	Distribution: add a lightweight Farcaster Frame entry (“Message me”) that opens the quote → pay → send flow; Julio’s frame scaffolds can help.  ￼
+	•	Events use-case: the Eventz repo shows a clean, on-chain, ticket-style flow you can mirror for “one-per-person” slots and confirmations.  ￼
+
+Simple rules (how the market feels)
+	•	Proof-or-Pay: Verified humans pay near-zero; unverified can still send but at a higher price.
+	•	Dynamic floor: Base price × surge based on current inbox utilization.
+	•	Fairness: One attempt per person per window (use Self nullifier). Block/allow lists by nullifier.
+
+Screens to build
+	•	Compose (message, optional tags), Quote (current price; “verify for discount”), Pay (x402 handshake), Sent (queued with ETA), Inbox (recipient), Settings (slots, base price, topics, verification required yes/no).
+Self-x402 gives you the “verify + pay” building blocks and example folders (consumer app, vendor API, facilitator) to copy into this flow.  ￼
+
+Success criteria
+	•	A verified sender can compose → see discounted quote → pay a few cents (or less) → recipient sees it in their next slot.
+	•	An unverified sender can still send but pays the posted surge price.
+	•	Unopened messages after the time window auto-refund to the sender (tiny fee kept for infra).
+
+Repos to reference while building
+	•	Self-x402 (verify once + x402 payments; architecture + example apps/facilitator).  ￼
+	•	TEE-Shield-Launcher (trusted frontend/integrity badge pattern).  ￼
+	•	ShadowVault (clean ZK patterns for “prove without revealing”).  ￼
+	•	Frames-Project-Builder / Scaffold-ETH-Frames (Farcaster frame stubs for a “Message me” entrypoint).  ￼
+	•	Eventz (one-per-person/slot-style UX inspiration).  ￼
+
+Tone for the build: keep it warm and human. Copy ideas: “This inbox stays human. Prove once, pay tiny per message. Unopened? You get a refund.” Use the repos above as lego bricks, not heavy dependencies.
+
+⸻
+
+Want me to turn this into a 1-week build plan with the exact screens and user stories?
