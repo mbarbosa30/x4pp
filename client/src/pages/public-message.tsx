@@ -53,7 +53,7 @@ export default function PublicMessage() {
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Mail className="h-6 w-6 text-primary" />
-            <span className="text-lg md:text-xl font-semibold">Attention Market</span>
+            <span className="text-lg md:text-xl font-semibold">x4pp</span>
           </div>
           <ThemeToggle />
         </div>
