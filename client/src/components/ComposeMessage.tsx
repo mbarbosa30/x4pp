@@ -117,12 +117,15 @@ export default function ComposeMessage({ isVerified, onSend }: ComposeMessagePro
       // Simulate payment processing delay
       await new Promise(resolve => setTimeout(resolve, 2000));
 
-      // Generate mock payment proof
+      // Generate mock payment proof with all required fields
       const mockPaymentProof = {
+        chainId: paymentRequirements.network.chainId,
+        tokenAddress: paymentRequirements.asset.address,
+        amount: paymentRequirements.amount,
         sender: "0x" + Math.random().toString(16).substr(2, 40),
         recipient: paymentRequirements.recipient,
-        amount: paymentRequirements.amount,
         nonce: paymentRequirements.nonce,
+        expiration: paymentRequirements.expiration,
         signature: "0xmock_signature",
         txHash: "0xmock_tx_hash",
       };

@@ -94,18 +94,25 @@ async function verifyPayment(
   expectedAmountUSD: number
 ): Promise<boolean> {
   try {
+    console.log("[Payment Verification] Starting verification...");
+    console.log("[Payment Verification] Proof:", JSON.stringify(proof, null, 2));
+    console.log("[Payment Verification] Expected amount USD:", expectedAmountUSD);
+
     // Basic validation
     if (!proof.signature || !proof.nonce) {
+      console.log("[Payment Verification] FAILED: Missing signature or nonce");
       return false;
     }
 
     // Verify chain ID matches Celo
     if (proof.chainId !== CELO_CONFIG.chainId) {
+      console.log(`[Payment Verification] FAILED: Chain ID mismatch. Got ${proof.chainId}, expected ${CELO_CONFIG.chainId}`);
       return false;
     }
 
     // Verify token is USDC
     if (proof.tokenAddress.toLowerCase() !== CELO_CONFIG.usdcAddress.toLowerCase()) {
+      console.log(`[Payment Verification] FAILED: Token address mismatch. Got ${proof.tokenAddress}, expected ${CELO_CONFIG.usdcAddress}`);
       return false;
     }
 
@@ -113,18 +120,24 @@ async function verifyPayment(
     const expectedAmount = formatUSDC(expectedAmountUSD);
     const tolerance = "1000"; // 0.001 USDC tolerance
     const amountDiff = Math.abs(parseInt(proof.amount) - parseInt(expectedAmount));
+    console.log(`[Payment Verification] Amount check: proof=${proof.amount}, expected=${expectedAmount}, diff=${amountDiff}, tolerance=${tolerance}`);
     if (amountDiff > parseInt(tolerance)) {
+      console.log("[Payment Verification] FAILED: Amount mismatch");
       return false;
     }
 
     // Verify expiration
-    if (proof.expiration < Math.floor(Date.now() / 1000)) {
+    const now = Math.floor(Date.now() / 1000);
+    console.log(`[Payment Verification] Expiration check: proof=${proof.expiration}, now=${now}, valid=${proof.expiration >= now}`);
+    if (proof.expiration < now) {
+      console.log("[Payment Verification] FAILED: Payment expired");
       return false;
     }
 
     // TODO: In production, verify EIP-712 signature
     // TODO: Call facilitator to settle payment on-chain
     // For now, accept if basic checks pass
+    console.log("[Payment Verification] SUCCESS: All checks passed");
     return true;
   } catch (error) {
     console.error("Payment verification error:", error);
@@ -136,3 +149,27 @@ async function verifyPayment(
 export function getPaymentFromRequest(req: Request): PaymentProof | null {
   return (req as any).payment || null;
 }
+
+// Verify payment proof from header (exported for x402 routes)
+export async function verifyPaymentProof(paymentHeader: string): Promise<PaymentProof> {
+  try {
+    const proof = JSON.parse(paymentHeader) as PaymentProof;
+    
+    // Basic structure validation
+    if (!proof.chainId || !proof.tokenAddress || !proof.amount || !proof.sender ||  
+        !proof.recipient || !proof.nonce || !proof.expiration || !proof.signature) {
+      throw new Error("Invalid payment proof structure");
+    }
+
+    // Note: We can't verify against expected amount here since we don't have it
+    // The routes.ts will call verifyPayment with the expected amount
+    
+    return proof;
+  } catch (error) {
+    console.error("Payment proof parsing error:", error);
+    throw new Error("Invalid payment proof format");
+  }
+}
+
+// Export verifyPayment for routes to validate payment against expected amount
+export { verifyPayment };

@@ -3,7 +3,7 @@ import { db } from "../db";
 import { users, messages, payments, messageQueue } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { calculateDynamicPrice, calculateSlotExpiry, getPriorityScore } from "../services/pricing";
-import { generatePaymentRequirements, getPaymentFromRequest } from "./middleware";
+import { generatePaymentRequirements, getPaymentFromRequest, verifyPaymentProof, verifyPayment } from "./middleware";
 import { PriceQuoteRequest, MessageCommitRequest, PriceQuoteResponse } from "./types";
 import { formatUSDC, CELO_CONFIG } from "../config/celo";
 import { logReputationEvent } from "../reputation";
@@ -124,7 +124,7 @@ router.post("/commit", async (req, res) => {
       });
     }
 
-    // Verify payment proof
+    // Parse and verify payment proof structure
     try {
       paymentProof = await verifyPaymentProof(paymentHeader);
     } catch (error) {
@@ -133,6 +133,9 @@ router.post("/commit", async (req, res) => {
         details: error instanceof Error ? error.message : "Unknown error",
       });
     }
+    
+    // Verify payment amount and other details (needs to happen after pricing calculation)
+    // This is done below after we calculate the expected price
 
     // Look up sender by their authenticated wallet address from payment proof
     // This prevents spoofing since wallet address is cryptographically verified
@@ -153,13 +156,12 @@ router.post("/commit", async (req, res) => {
       isVerifiedHuman,
     });
 
-    // Verify payment amount matches expected price
-    const paidAmount = parseFloat(paymentProof.amount);
-    if (paidAmount < pricing.priceUSD) {
+    // Verify payment amount, expiration, and other details
+    const isValidPayment = await verifyPayment(paymentProof, pricing.priceUSD);
+    if (!isValidPayment) {
       return res.status(400).json({
-        error: "Insufficient payment",
-        required: pricing.priceUSD,
-        paid: paidAmount,
+        error: "Payment verification failed",
+        details: "Check server logs for details",
       });
     }
 
