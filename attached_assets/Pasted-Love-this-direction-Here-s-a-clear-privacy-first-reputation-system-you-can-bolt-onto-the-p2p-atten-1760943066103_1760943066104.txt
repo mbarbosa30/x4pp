@@ -1,0 +1,175 @@
+Love this direction. Here’s a clear, privacy-first reputation system you can bolt onto the p2p attention market without getting creepy or gameable.
+
+What we’re scoring (two sides)
+
+Sender reputation (can I be trusted to reach people?)
+	•	Are my messages opened quickly?
+	•	Do I get replies?
+	•	Do recipients rate my messages as useful?
+	•	Do I behave well (few blocks, few refunds)?
+
+Recipient reputation (is this inbox worth paying to reach?)
+	•	Do they open on time?
+	•	Do they reply when there’s a bounty/SLA?
+	•	Do they refund fairly if they don’t engage?
+	•	Do senders rate the interaction positively?
+
+All of this is keyed to the Self nullifier (unique-per-person, no PII).
+
+⸻
+
+Events you already have (the raw signals)
+	•	message.sent (has bid, tags, sender_nullifier, recipient_nullifier)
+	•	message.delivered (won a slot)
+	•	message.opened (timestamp)
+	•	message.replied (timestamp)
+	•	message.refunded (reason: unopened, blocked, expired)
+	•	recipient.blocked(sender)
+	•	sender.vouched_by(recipient) (optional)
+	•	bounty.paid (if reply within SLA)
+	•	quick-rating (1-tap emoji from either side after an interaction)
+
+You don’t need ratings text—just counts. Keep it minimal and private.
+
+⸻
+
+MVP scoring (simple, robust, hard to game)
+
+1) Use rates with confidence, not raw ratios
+
+Small samples lie. Use the Wilson lower bound (95%) for any “success rate” metric so new accounts can’t fake a 100% with 1–2 interactions.
+	•	open_rate_LB over last 90 days
+	•	reply_rate_LB over last 90 days
+	•	positive_rating_LB (quick reactions)
+
+2) Add a few friction signals
+	•	refund_rate (lower is better)
+	•	block_rate (lower is better)
+	•	SLA_met_rate for recipients (opened/replied within declared SLA)
+	•	net_contribution for senders (paid – refunded) per message, capped (prevents pay-to-win)
+
+3) Decay everything gently
+
+Recent behavior matters more. Exponential decay with a 60–90 day half-life keeps scores fresh.
+
+Sender score (0–100), example
+
+sender_score =
+  45 * reply_rate_LB +
+  20 * open_rate_LB +
+  10 * positive_rating_LB +
+   8 * vouch_score +
+  -6 * refund_rate +
+  -7 * block_rate +
+   5 * contribution_score
+
+	•	reply_rate_LB dominates (quality)
+	•	vouch_score = sum of vouches weighted by the voucher’s own reputation (capped)
+	•	contribution_score = normalized net_contribution per delivered msg, clipped so money can’t brute-force the score
+
+Recipient score (0–100), example
+
+recipient_score =
+  40 * SLA_met_rate_LB +
+  30 * reply_rate_LB_when_bounty +
+  15 * open_rate_LB +
+ -10 * refund_rate +
+  10 * positive_rating_LB
+
+Keep weights human-readable so you can tune by eye after week 1.
+
+⸻
+
+Vouching (social proof without doxxing)
+	•	Lightweight vouches: Any recipient can “vouch” a sender after a good exchange.
+	•	Weighted vouches: A vouch from a highly-rated recipient is worth more (e.g., 1.0 pt) than from a new or low-rated account (e.g., 0.2 pt).
+	•	Slashing: If a sender gets blocked by many recipients soon after being vouched, the vouch loses weight (discourages careless vouching).
+	•	Caps: Max vouch impact = 8–10 points on the sender score (prevents circles from inflating to the moon).
+
+This mirrors your “VouchLines” thinking but keeps it simple.
+
+⸻
+
+Topic-aware reputation (optional but powerful)
+
+Store counts per tag (e.g., hiring, fundraising, support, local). Then compute tag-specific scores with the same recipe.
+Recipients can weight tags in their inbox settings (e.g., “Boost hiring by +0.3”). This keeps relevance high without extra complexity.
+
+⸻
+
+Transparency in the UI (tiny, honest badges)
+
+Show 3–5 plain-English facts instead of a mysterious number:
+
+For senders
+	•	“Opens: 78% (confident) · Replies: 41% (confident)”
+	•	“5 trusted vouches · 0 blocks in 90d”
+	•	“Verified human (Self)”
+
+For recipients
+	•	“Opens in ~2h (P90) · Replies 36% w/ bounty”
+	•	“Refunds if unopened (24h)”
+	•	“Trusted by 12 senders”
+
+Use a small color badge (Bronze/Silver/Gold/Platinum) derived from the 0–100 score, but let users expand to see the facts.
+
+⸻
+
+Anti-gaming guardrails (simple rules that work)
+	•	One-per-recipient throttle: A sender’s attempts to the same recipient escalate in cost and don’t add rep if repeated within 24h.
+	•	No pay-to-win: Payments only affect delivery and a small contribution_score capped to a couple points.
+	•	Mutual-admiration cap: Limit how much two accounts can boost each other (vouch and rating influence capped per pair per month).
+	•	Cold-start fairness: New verified humans start at a neutral 50 with a “New” badge; their score can only rise fast on delivered + replied interactions (not on bids).
+
+⸻
+
+Privacy & integrity (your stack makes this easy)
+	•	Key by Self nullifier; never store PII.
+	•	Daily Merkle root of interaction events anchored on-chain (or a signed digest) so scores are auditable later.
+	•	Use TEE Shield patterns to attest the frontend hash (“this UI is legit”) and sign your scoring job outputs.
+	•	If you want public proofs later, adapt ShadowVault-style ZK patterns to prove aggregate stats (e.g., “reply_rate ≥ 30%”) without leaking raw counts.
+
+⸻
+
+Rollout plan (one week, incremental)
+
+Day 1–2 — MVP metrics
+	•	Log events; compute Wilson-bound open/reply rates; add exponential decay.
+	•	Show badges + 3 facts in composer and inbox.
+
+Day 3–4 — Vouches + blocks
+	•	Add one-click vouch/block; weight vouches by recipient score with caps; display “Trusted by N.”
+
+Day 5 — SLAs + refunds
+	•	Let recipients declare an SLA (e.g., open ≤ 24h); measure it and reward with a badge.
+	•	Automatic refunds for unopened messages after SLA; this feeds refund_rate.
+
+Day 6–7 — Tag-aware scores
+	•	Track per-tag counts; compute tag-specific rates; expose a simple “interests” control in settings.
+
+⸻
+
+Quick formulas (copyable)
+
+Wilson lower bound (95%):
+For successes s out of n, p̂ = s/n, z = 1.96
+
+LB = ( p̂ + z²/(2n) - z * sqrt( (p̂(1-p̂) + z²/(4n)) / n ) ) / (1 + z²/n)
+
+Exponential decay weight for event at age t days, half-life H:
+
+w = 0.5^( t / H )
+
+Apply w to counts before computing rates (so recent actions weigh more).
+
+⸻
+
+Where the repos fit
+	•	Self-x402: identity (Self proof → nullifier) + tiny payments; also gives you clean request/response patterns for gating and refunds.
+	•	TEE-Shield: sign/attest the UI and score outputs to prevent spoofing and “score swapping.”
+	•	ShadowVault (later): ZK proofs of aggregates if you want public verifiability without revealing raw data.
+	•	Frames scaffolds: easy “Message me” entry that shows badges + price quote in a Farcaster Frame.
+
+⸻
+
+If you want, I can plug your current event names into a tiny scoring script and hand you a ready-to-drop /scores endpoint spec (inputs, outputs, and the JSON your UI expects).
