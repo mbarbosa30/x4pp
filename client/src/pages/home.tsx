@@ -122,18 +122,19 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="sticky top-0 z-50 border-b backdrop-blur-lg bg-background/80">
-        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Mail className="h-6 w-6 text-primary" />
-            <h1 className="text-xl font-semibold">x4pp</h1>
+      <header className="sticky top-0 z-50 border-b backdrop-blur-lg bg-background/95">
+        <div className="container mx-auto px-3 md:px-4 h-14 md:h-16 flex items-center justify-between">
+          <div className="flex items-center gap-2 md:gap-3">
+            <Mail className="h-5 w-5 md:h-6 md:w-6 text-primary" />
+            <h1 className="text-lg md:text-xl font-semibold">x4pp</h1>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 md:gap-3">
             <Button
               variant="ghost"
               size="icon"
               onClick={() => setShowCompose(true)}
               data-testid="button-new-message"
+              className="h-9 w-9 md:h-10 md:w-10"
             >
               <Plus className="h-5 w-5" />
             </Button>
@@ -143,36 +144,37 @@ export default function Home() {
       </header>
 
       {/* Main Content */}
-      <main className="container mx-auto px-4 py-4 md:py-8">
+      <main className="container mx-auto px-3 md:px-4 py-3 md:py-6">
         <div className="max-w-6xl mx-auto">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="mb-4 md:mb-6 w-full sm:w-auto">
-              <TabsTrigger value="inbox" data-testid="tab-inbox" className="flex-1 sm:flex-initial">
+            <TabsList className="mb-3 md:mb-6 w-full sm:w-auto grid grid-cols-3 sm:flex h-11">
+              <TabsTrigger value="inbox" data-testid="tab-inbox" className="text-xs sm:text-sm">
                 <Inbox className="h-4 w-4 sm:mr-2" />
                 <span className="hidden sm:inline">Inbox</span>
               </TabsTrigger>
-              <TabsTrigger value="compose" data-testid="tab-compose" className="flex-1 sm:flex-initial">
+              <TabsTrigger value="compose" data-testid="tab-compose" className="text-xs sm:text-sm">
                 <Mail className="h-4 w-4 sm:mr-2" />
                 <span className="hidden sm:inline">Compose</span>
               </TabsTrigger>
-              <TabsTrigger value="settings" data-testid="tab-settings" className="flex-1 sm:flex-initial">
+              <TabsTrigger value="settings" data-testid="tab-settings" className="text-xs sm:text-sm">
                 <SettingsIcon className="h-4 w-4 sm:mr-2" />
                 <span className="hidden sm:inline">Settings</span>
               </TabsTrigger>
             </TabsList>
 
             {/* Inbox Tab */}
-            <TabsContent value="inbox" className="space-y-4 md:space-y-6">
-              <div className="overflow-x-auto">
+            <TabsContent value="inbox" className="space-y-3 md:space-y-4 mt-0">
+              <div className="overflow-x-auto -mx-3 px-3 md:mx-0 md:px-0">
                 <AttentionSlots totalSlots={5} usedSlots={3} timeWindow="hour" />
               </div>
 
               {selectedMessage && message ? (
-                <div className="space-y-4">
+                <div className="space-y-3 md:space-y-4">
                   <Button
                     variant="ghost"
                     onClick={() => setSelectedMessage(null)}
                     data-testid="button-back-to-inbox"
+                    className="text-sm"
                   >
                     ← Back to inbox
                   </Button>
@@ -191,7 +193,7 @@ export default function Home() {
                   />
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-2 md:space-y-3">
                   {mockMessages.map((msg) => (
                     <MessageCard
                       key={msg.id}

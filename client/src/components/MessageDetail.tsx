@@ -85,18 +85,19 @@ export default function MessageDetail({
   };
 
   return (
-    <Card className="p-6">
-      <div className="space-y-6">
-        <div className="flex items-start gap-4">
-          <Avatar className="h-14 w-14">
-            <AvatarFallback className="bg-primary/10 text-primary font-medium text-lg">
+    <Card className="p-4 md:p-6">
+      <div className="space-y-4 md:space-y-6">
+        {/* Header with sender info */}
+        <div className="flex items-start gap-3 md:gap-4">
+          <Avatar className="h-12 w-12 md:h-14 md:w-14 flex-shrink-0">
+            <AvatarFallback className="bg-primary/10 text-primary font-medium text-base md:text-lg">
               {getInitials(senderName)}
             </AvatarFallback>
           </Avatar>
 
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-2 flex-wrap">
-              <span className="text-sm font-semibold" data-testid="text-sender-address">
+              <span className="text-sm md:text-base font-semibold" data-testid="text-sender-address">
                 {senderName}
               </span>
               <VerificationBadge verified={senderVerified} size="md" />
@@ -113,7 +114,7 @@ export default function MessageDetail({
                 />
               </div>
             )}
-            <div className="flex items-center gap-3 text-sm text-muted-foreground">
+            <div className="flex items-center gap-2 md:gap-3 text-xs md:text-sm text-muted-foreground flex-wrap">
               <span data-testid="text-timestamp">{timestamp}</span>
               <Badge variant="outline" className="bg-price/10 border-price/20 text-price">
                 <DollarSign className="h-3 w-3 mr-0.5" />
@@ -123,44 +124,68 @@ export default function MessageDetail({
           </div>
         </div>
 
+        {/* Message body */}
         <div className="prose prose-sm max-w-none">
-          <p className="text-foreground whitespace-pre-wrap" data-testid="text-message-body">
+          <p className="text-sm md:text-base text-foreground whitespace-pre-wrap leading-relaxed" data-testid="text-message-body">
             {message}
           </p>
         </div>
 
+        {/* Reply bounty */}
         {replyBounty && replyBounty > 0 && (
-          <Card className="p-4 bg-success/5 border-success/20">
-            <div className="flex items-center gap-2 text-success">
-              <DollarSign className="h-4 w-4" />
-              <span className="text-sm font-medium">
+          <Card className="p-3 md:p-4 bg-success/5 border-success/20">
+            <div className="flex items-center gap-2 text-success flex-wrap">
+              <DollarSign className="h-4 w-4 flex-shrink-0" />
+              <span className="text-xs md:text-sm font-medium">
                 Reply bounty: ${replyBounty.toFixed(2)} USDC
               </span>
-              <Clock className="h-3 w-3 ml-auto" />
-              <span className="text-xs">within 24 hours</span>
+              <div className="flex items-center gap-1 ml-auto">
+                <Clock className="h-3 w-3" />
+                <span className="text-xs">24h</span>
+              </div>
             </div>
           </Card>
         )}
 
         <Separator />
 
+        {/* Action buttons or reply form */}
         {!showReply ? (
-          <div className="flex items-center gap-3 flex-wrap">
-            <Button onClick={() => setShowReply(true)} data-testid="button-reply">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 md:gap-3">
+            <Button 
+              onClick={() => setShowReply(true)} 
+              data-testid="button-reply"
+              className="w-full sm:w-auto"
+            >
               <Reply className="h-4 w-4 mr-2" />
               Reply
             </Button>
             {onVouch && (
-              <Button variant="outline" onClick={handleVouchClick} data-testid="button-vouch">
+              <Button 
+                variant="outline" 
+                onClick={handleVouchClick} 
+                data-testid="button-vouch"
+                className="w-full sm:w-auto"
+              >
                 <ThumbsUp className="h-4 w-4 mr-2" />
                 Vouch
               </Button>
             )}
-            <Button variant="outline" onClick={onBlock} data-testid="button-block">
+            <Button 
+              variant="outline" 
+              onClick={onBlock} 
+              data-testid="button-block"
+              className="w-full sm:w-auto"
+            >
               <Ban className="h-4 w-4 mr-2" />
-              Block sender
+              Block
             </Button>
-            <Button variant="ghost" onClick={onReport} data-testid="button-report">
+            <Button 
+              variant="ghost" 
+              onClick={onReport} 
+              data-testid="button-report"
+              className="w-full sm:w-auto"
+            >
               <Flag className="h-4 w-4 mr-2" />
               Report
             </Button>
@@ -171,15 +196,24 @@ export default function MessageDetail({
               placeholder="Write your reply..."
               value={replyText}
               onChange={(e) => setReplyText(e.target.value)}
-              className="min-h-24"
+              className="min-h-32 text-base"
               data-testid="input-reply"
             />
-            <div className="flex items-center gap-3">
-              <Button onClick={handleReply} data-testid="button-send-reply">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 md:gap-3">
+              <Button 
+                onClick={handleReply} 
+                data-testid="button-send-reply"
+                className="w-full sm:w-auto"
+              >
                 <Reply className="h-4 w-4 mr-2" />
                 Send Reply
               </Button>
-              <Button variant="ghost" onClick={() => setShowReply(false)} data-testid="button-cancel-reply">
+              <Button 
+                variant="ghost" 
+                onClick={() => setShowReply(false)} 
+                data-testid="button-cancel-reply"
+                className="w-full sm:w-auto"
+              >
                 Cancel
               </Button>
             </div>

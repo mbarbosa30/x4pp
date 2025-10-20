@@ -42,7 +42,7 @@ export default function MessageCard({
 
   return (
     <Card
-      className={`p-4 cursor-pointer transition-all hover-elevate ${
+      className={`p-3 md:p-4 cursor-pointer transition-all hover-elevate active-elevate-2 ${
         !opened ? "bg-card border-primary/20" : "opacity-75"
       }`}
       onClick={onClick}
@@ -50,37 +50,44 @@ export default function MessageCard({
       onMouseLeave={() => setIsHovered(false)}
       data-testid={`message-card-${id}`}
     >
-      <div className="flex items-center gap-4">
-        <Avatar className="h-12 w-12">
-          <AvatarFallback className="bg-primary/10 text-primary font-medium">
-            {getInitials(senderName)}
-          </AvatarFallback>
-        </Avatar>
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+        {/* Header row on mobile, left side on desktop */}
+        <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
+          <Avatar className="h-10 w-10 sm:h-12 sm:w-12 flex-shrink-0">
+            <AvatarFallback className="bg-primary/10 text-primary font-medium text-sm sm:text-base">
+              {getInitials(senderName)}
+            </AvatarFallback>
+          </Avatar>
 
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1 flex-wrap">
-            <span className={`text-sm ${!opened ? "font-semibold" : ""}`} data-testid="text-sender">
-              {senderName}
-            </span>
-            <VerificationBadge verified={senderVerified} size="sm" />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
+              <span className={`text-sm ${!opened ? "font-semibold" : ""}`} data-testid="text-sender">
+                {senderName}
+              </span>
+              <VerificationBadge verified={senderVerified} size="sm" />
+            </div>
+            <p className={`text-sm text-muted-foreground line-clamp-1 ${!opened ? "font-medium text-foreground" : ""}`} data-testid="text-preview">
+              {messagePreview}
+            </p>
+            {/* Reputation badge on mobile below name */}
             {reputation && (
-              <ReputationBadge
-                openRate={reputation.openRate}
-                replyRate={reputation.replyRate}
-                vouchCount={reputation.vouchCount}
-                totalSent={reputation.totalSent}
-                showFor="sender"
-                compact={true}
-              />
+              <div className="mt-1 sm:hidden">
+                <ReputationBadge
+                  openRate={reputation.openRate}
+                  replyRate={reputation.replyRate}
+                  vouchCount={reputation.vouchCount}
+                  totalSent={reputation.totalSent}
+                  showFor="sender"
+                  compact={true}
+                />
+              </div>
             )}
           </div>
-          <p className={`text-sm text-muted-foreground truncate ${!opened ? "font-medium text-foreground" : ""}`} data-testid="text-preview">
-            {messagePreview}
-          </p>
         </div>
 
-        <div className="flex flex-col items-end gap-2">
-          <Badge variant="outline" className="bg-price/10 border-price/20 text-price font-semibold" data-testid="badge-amount">
+        {/* Amount and time on mobile as second row, desktop as right column */}
+        <div className="flex items-center justify-between sm:flex-col sm:items-end gap-2 sm:flex-shrink-0">
+          <Badge variant="outline" className="bg-price/10 border-price/20 text-price font-semibold text-xs sm:text-sm" data-testid="badge-amount">
             <DollarSign className="h-3 w-3 mr-0.5" />
             {amount.toFixed(2)}
           </Badge>
@@ -89,6 +96,20 @@ export default function MessageCard({
             <span data-testid="text-time-remaining">{timeRemaining}</span>
           </div>
         </div>
+
+        {/* Reputation on desktop only (inline with content) */}
+        {reputation && (
+          <div className="hidden sm:block">
+            <ReputationBadge
+              openRate={reputation.openRate}
+              replyRate={reputation.replyRate}
+              vouchCount={reputation.vouchCount}
+              totalSent={reputation.totalSent}
+              showFor="sender"
+              compact={true}
+            />
+          </div>
+        )}
       </div>
 
       {!opened && (
