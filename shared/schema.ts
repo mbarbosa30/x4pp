@@ -7,6 +7,7 @@ export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   username: text("username").notNull().unique(),
   selfNullifier: text("self_nullifier").unique(),
+  walletAddress: text("wallet_address"), // Celo wallet address for receiving payments
   displayName: text("display_name").notNull(),
   basePrice: decimal("base_price", { precision: 10, scale: 2 }).notNull().default("0.05"),
   surgeMultiplier: decimal("surge_multiplier", { precision: 4, scale: 2 }).notNull().default("2.0"),

@@ -90,6 +90,13 @@ router.post("/commit", async (req, res) => {
       return res.status(404).json({ error: "Recipient not found" });
     }
 
+    // Verify recipient has a wallet address
+    if (!recipient.walletAddress) {
+      return res.status(400).json({
+        error: "Recipient has not configured a payment wallet address",
+      });
+    }
+
     // Calculate expected price
     const isVerifiedHuman = false; // TODO: Verify Self proof
     const pricing = await calculateDynamicPrice({
@@ -104,7 +111,7 @@ router.post("/commit", async (req, res) => {
       // No payment - return 402 with payment requirements
       const paymentReqs = generatePaymentRequirements(
         pricing.priceUSD,
-        recipient.id, // Send payment directly to recipient for MVP
+        recipient.walletAddress, // Send payment to recipient's Celo wallet
         5
       );
       return res.status(402).json({
@@ -149,6 +156,15 @@ router.post("/commit", async (req, res) => {
       })
       .returning();
 
+    // Verify payment recipient matches
+    if (paymentProof.recipient.toLowerCase() !== recipient.walletAddress.toLowerCase()) {
+      return res.status(400).json({
+        error: "Payment recipient mismatch",
+        expected: recipient.walletAddress,
+        received: paymentProof.recipient,
+      });
+    }
+
     // Record payment
     await db.insert(payments).values({
       messageId: message.id,
@@ -156,7 +172,7 @@ router.post("/commit", async (req, res) => {
       tokenAddress: CELO_CONFIG.usdcAddress,
       amount: pricing.priceUSD.toString(),
       sender: paymentProof.sender,
-      recipient: recipient.id,
+      recipient: recipient.walletAddress,
       nonce: paymentProof.nonce,
       signature: paymentProof.signature,
       status: "settled", // For MVP, assume instant settlement

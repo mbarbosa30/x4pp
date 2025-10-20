@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { db } from "./db";
-import { users, messages, vouches, blocks, reputationScores, insertMessageSchema, insertVouchSchema, insertBlockSchema } from "@shared/schema";
+import { users, messages, vouches, blocks, reputationScores, payments, insertMessageSchema, insertVouchSchema, insertBlockSchema } from "@shared/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { computeReputationScore, updateReputationScore, logReputationEvent } from "./reputation";
 import x402Routes from "./x402/routes";
@@ -95,21 +95,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       
+      // Check if already opened
+      const [existingMessage] = await db
+        .select()
+        .from(messages)
+        .where(eq(messages.id, id))
+        .limit(1);
+
+      if (!existingMessage) {
+        return res.status(404).json({ error: "Message not found" });
+      }
+
+      if (existingMessage.openedAt) {
+        return res.json({
+          ...existingMessage,
+          message: "Message already opened",
+        });
+      }
+
+      // Mark as opened
       const [message] = await db
         .update(messages)
         .set({ openedAt: new Date() })
         .where(eq(messages.id, id))
         .returning();
 
-      if (!message) {
-        return res.status(404).json({ error: "Message not found" });
+      // Release payment earnings to recipient
+      const [payment] = await db
+        .select()
+        .from(payments)
+        .where(eq(payments.messageId, id))
+        .limit(1);
+
+      if (payment && payment.status === "settled") {
+        // TODO: In production, execute USDC transfer to recipient
+        // For MVP, just log that earnings are released
+        console.log(`Payment released: ${payment.amount} USDC to recipient for message ${id}`);
+        
+        // Could update payment record with release info if needed
+        // await db.update(payments).set({ releasedAt: new Date() }).where(eq(payments.id, payment.id));
       }
 
       // Log reputation events
       await logReputationEvent(message.senderNullifier, "opened", id);
       await logReputationEvent(message.recipientNullifier, "delivered", id);
 
-      res.json(message);
+      res.json({
+        ...message,
+        earningsReleased: payment ? parseFloat(payment.amount) : 0,
+      });
     } catch (error) {
       console.error("Error opening message:", error);
       res.status(500).json({ error: "Failed to open message" });

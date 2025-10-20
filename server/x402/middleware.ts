@@ -44,9 +44,23 @@ export function requirePayment(priceUSD: number) {
 // Generate x402 PaymentRequirements response
 export function generatePaymentRequirements(
   priceUSD: number,
-  customRecipient?: string,
+  recipientWalletAddress: string | undefined,
   expirationMinutes: number = 5
 ): PaymentRequirementsResponse {
+  // Validate recipient address if provided
+  if (recipientWalletAddress) {
+    // Validate it looks like an Ethereum/Celo address
+    if (!recipientWalletAddress.match(/^0x[a-fA-F0-9]{40}$/)) {
+      throw new Error("Invalid Celo wallet address format");
+    }
+  } else {
+    // Fall back to payment wallet (for generic middleware use)
+    recipientWalletAddress = PAYMENT_WALLET.address || "";
+    if (!recipientWalletAddress) {
+      throw new Error("No recipient wallet address available");
+    }
+  }
+
   const nonce = uuidv4();
   const expiration = Math.floor(Date.now() / 1000) + expirationMinutes * 60;
   const amountUSDC = formatUSDC(priceUSD);
@@ -66,7 +80,7 @@ export function generatePaymentRequirements(
           decimals: CELO_CONFIG.decimals,
         },
         amount: amountUSDC,
-        recipient: customRecipient || PAYMENT_WALLET.address,
+        recipient: recipientWalletAddress,
         nonce,
         expiration,
       },

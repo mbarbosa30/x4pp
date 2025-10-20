@@ -1,10 +1,16 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { startRefundMonitor } from "./services/refunds";
 
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+
+// Start refund monitoring service
+if (process.env.NODE_ENV !== "test") {
+  startRefundMonitor(5); // Check every 5 minutes
+}
 
 app.use((req, res, next) => {
   const start = Date.now();
