@@ -1,4 +1,4 @@
-# Design Guidelines: p2p Attention Market DM App
+# Design Guidelines: x4pp - p2p Attention Market DM App
 
 ## Design Approach
 

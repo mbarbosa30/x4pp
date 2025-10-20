@@ -1,8 +1,8 @@
-# P2P Attention Market DM App
+# x4pp - P2P Attention Market DM App
 
 ## Overview
 
-This is a peer-to-peer messaging application with an innovative "attention market" model where sending messages requires humanity verification and dynamic pricing. The app enables users to monetize their attention by setting prices for incoming messages, with built-in protections against spam through verification gates and surge pricing mechanisms.
+x4pp is a peer-to-peer messaging application with an innovative "attention market" model where sending messages requires humanity verification and dynamic pricing. The app enables users to monetize their attention by setting prices for incoming messages, with built-in protections against spam through verification gates and surge pricing mechanisms.
 
 Key features include:
 - **Proof-of-humanity gating**: Verified humans pay discounted rates; unverified users can still send but at higher prices

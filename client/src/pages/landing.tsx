@@ -27,7 +27,7 @@ export default function Landing() {
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Mail className="h-6 w-6 text-primary" />
-            <span className="text-xl font-semibold">Attention Market</span>
+            <span className="text-xl font-semibold">x4pp</span>
           </div>
           <div className="flex items-center gap-3">
             <ThemeToggle />
@@ -179,7 +179,7 @@ export default function Landing() {
                   <Badge variant="outline">Premium</Badge>
                 </div>
                 <div className="font-mono text-sm text-primary bg-background p-3 rounded border">
-                  attentionmarket.app/@{username || "yourname"}
+                  x4pp.app/@{username || "yourname"}
                 </div>
                 <div className="space-y-3 pt-4">
                   <div className="flex justify-between text-sm">
@@ -226,7 +226,7 @@ export default function Landing() {
             <div className="flex items-center gap-2">
               <Mail className="h-5 w-5 text-muted-foreground" />
               <span className="text-sm text-muted-foreground">
-                © 2025 Attention Market. Built on Celo.
+                © 2025 x4pp. Built on Celo.
               </span>
             </div>
             <div className="flex items-center gap-6 text-sm text-muted-foreground">
