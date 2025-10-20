@@ -1,0 +1,198 @@
+import { Router } from "express";
+import { db } from "../db";
+import { users, messages, payments, messageQueue } from "@shared/schema";
+import { eq } from "drizzle-orm";
+import { calculateDynamicPrice, calculateSlotExpiry, getPriorityScore } from "../services/pricing";
+import { generatePaymentRequirements, getPaymentFromRequest } from "./middleware";
+import { PriceQuoteRequest, MessageCommitRequest, PriceQuoteResponse } from "./types";
+import { formatUSDC, CELO_CONFIG } from "../config/celo";
+import { logReputationEvent } from "../reputation";
+
+const router = Router();
+
+// POST /api/x402/quote - Get price quote for sending a message
+router.post("/quote", async (req, res) => {
+  try {
+    const quoteReq: PriceQuoteRequest = req.body;
+
+    // Find recipient by username or ID
+    let recipient;
+    if (quoteReq.recipientUsername) {
+      [recipient] = await db
+        .select()
+        .from(users)
+        .where(eq(users.username, quoteReq.recipientUsername))
+        .limit(1);
+    } else if (quoteReq.recipientId) {
+      [recipient] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, quoteReq.recipientId))
+        .limit(1);
+    }
+
+    if (!recipient) {
+      return res.status(404).json({ error: "Recipient not found" });
+    }
+
+    // TODO: Verify Self proof if provided to determine human status
+    const isVerifiedHuman = false; // For MVP, treat all as unverified
+
+    // Calculate dynamic price
+    const pricing = await calculateDynamicPrice({
+      recipientId: recipient.id,
+      recipientUsername: recipient.username,
+      isVerifiedHuman,
+    });
+
+    const response: PriceQuoteResponse = {
+      priceUSD: pricing.priceUSD,
+      priceUSDC: formatUSDC(pricing.priceUSD),
+      basePrice: pricing.basePrice,
+      surgeFactor: pricing.surgeFactor,
+      humanDiscount: pricing.humanDiscount,
+      discountReason: isVerifiedHuman ? "Self-verified human" : undefined,
+      requiresProof: false, // For MVP, verification is optional
+      utilizationRate: pricing.utilizationRate,
+      slotsAvailable: pricing.slotsAvailable,
+      expiresAt: Math.floor(Date.now() / 1000) + 300, // Quote valid for 5 minutes
+    };
+
+    res.json(response);
+  } catch (error) {
+    console.error("Quote generation error:", error);
+    res.status(500).json({ error: "Failed to generate quote" });
+  }
+});
+
+// POST /api/x402/commit - Commit a message (requires payment via x402)
+router.post("/commit", async (req, res) => {
+  try {
+    const commitReq: MessageCommitRequest = req.body;
+
+    // Find recipient
+    let recipient;
+    if (commitReq.recipientUsername) {
+      [recipient] = await db
+        .select()
+        .from(users)
+        .where(eq(users.username, commitReq.recipientUsername))
+        .limit(1);
+    } else if (commitReq.recipientId) {
+      [recipient] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, commitReq.recipientId))
+        .limit(1);
+    }
+
+    if (!recipient) {
+      return res.status(404).json({ error: "Recipient not found" });
+    }
+
+    // Calculate expected price
+    const isVerifiedHuman = false; // TODO: Verify Self proof
+    const pricing = await calculateDynamicPrice({
+      recipientId: recipient.id,
+      isVerifiedHuman,
+    });
+
+    // Check for payment header
+    const paymentHeader = req.headers["x-payment"] as string;
+
+    if (!paymentHeader) {
+      // No payment - return 402 with payment requirements
+      const paymentReqs = generatePaymentRequirements(
+        pricing.priceUSD,
+        recipient.id, // Send payment directly to recipient for MVP
+        5
+      );
+      return res.status(402).json({
+        message: "Payment required",
+        quote: {
+          priceUSD: pricing.priceUSD,
+          priceUSDC: formatUSDC(pricing.priceUSD),
+        },
+        ...paymentReqs,
+      });
+    }
+
+    // Parse and verify payment
+    let paymentProof;
+    try {
+      paymentProof = JSON.parse(paymentHeader);
+    } catch (error) {
+      return res.status(400).json({ error: "Invalid payment format" });
+    }
+
+    // Verify payment amount matches quote
+    const expectedAmount = formatUSDC(pricing.priceUSD);
+    if (paymentProof.amount !== expectedAmount) {
+      return res.status(400).json({
+        error: "Payment amount mismatch",
+        expected: expectedAmount,
+        received: paymentProof.amount,
+      });
+    }
+
+    // Create message
+    const [message] = await db
+      .insert(messages)
+      .values({
+        senderNullifier: commitReq.senderNullifier,
+        recipientNullifier: recipient.selfNullifier || recipient.id,
+        senderName: commitReq.senderName,
+        senderEmail: commitReq.senderEmail,
+        content: commitReq.content,
+        amount: pricing.priceUSD.toString(),
+        replyBounty: commitReq.replyBounty?.toString(),
+      })
+      .returning();
+
+    // Record payment
+    await db.insert(payments).values({
+      messageId: message.id,
+      chainId: CELO_CONFIG.chainId,
+      tokenAddress: CELO_CONFIG.usdcAddress,
+      amount: pricing.priceUSD.toString(),
+      sender: paymentProof.sender,
+      recipient: recipient.id,
+      nonce: paymentProof.nonce,
+      signature: paymentProof.signature,
+      status: "settled", // For MVP, assume instant settlement
+      txHash: paymentProof.txHash,
+      settledAt: new Date(),
+    });
+
+    // Add to message queue with priority
+    const priority = await getPriorityScore(pricing.priceUSD);
+    const slotExpiry = await calculateSlotExpiry(recipient.id);
+
+    await db.insert(messageQueue).values({
+      messageId: message.id,
+      recipientId: recipient.id,
+      priority: priority.toString(),
+      slotExpiry,
+      status: "delivered",
+    });
+
+    // Log reputation event
+    await logReputationEvent(commitReq.senderNullifier, "sent", message.id);
+
+    res.status(200).json({
+      success: true,
+      messageId: message.id,
+      status: "delivered",
+      expiresAt: slotExpiry.toISOString(),
+      payment: {
+        status: "settled",
+        amount: pricing.priceUSD,
+      },
+    });
+  } catch (error) {
+    console.error("Message commit error:", error);
+    res.status(500).json({ error: "Failed to commit message" });
+  }
+});
+
+export default router;
