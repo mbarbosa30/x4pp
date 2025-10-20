@@ -98,6 +98,13 @@ Preferred communication style: Simple, everyday language.
 6. **blocks**: User blocking relationships
    - Simple nullifier pair tracking
 
+**Payment Architecture:**
+- Each user must configure a Celo wallet address (`walletAddress` field) to receive payments
+- Payment requirements are generated with recipient's wallet address as destination
+- Payments go directly to recipient's wallet (no escrow in MVP)
+- Payment verification includes recipient address matching
+- Auto-refunds execute from recipient's wallet (in production)
+
 **Data Privacy:**
 - Uses Self nullifiers instead of traditional user IDs to prevent PII exposure
 - No storage of verification documents or personal information

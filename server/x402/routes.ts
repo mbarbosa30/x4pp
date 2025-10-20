@@ -97,21 +97,21 @@ router.post("/commit", async (req, res) => {
       });
     }
 
-    // Calculate expected price
-    const isVerifiedHuman = false; // TODO: Verify Self proof
-    const pricing = await calculateDynamicPrice({
-      recipientId: recipient.id,
-      isVerifiedHuman,
-    });
-
-    // Check for payment header
+    // Parse payment proof first to get authenticated sender wallet address
+    let paymentProof;
     const paymentHeader = req.headers["x-payment"] as string;
-
+    
     if (!paymentHeader) {
-      // No payment - return 402 with payment requirements
+      // No payment yet - calculate price assuming not verified for quote
+      const pricing = await calculateDynamicPrice({
+        recipientId: recipient.id,
+        isVerifiedHuman: false,
+      });
+
+      // Return 402 with payment requirements
       const paymentReqs = generatePaymentRequirements(
         pricing.priceUSD,
-        recipient.walletAddress, // Send payment to recipient's Celo wallet
+        recipient.walletAddress,
         5
       );
       return res.status(402).json({
@@ -124,21 +124,42 @@ router.post("/commit", async (req, res) => {
       });
     }
 
-    // Parse and verify payment
-    let paymentProof;
+    // Verify payment proof
     try {
-      paymentProof = JSON.parse(paymentHeader);
+      paymentProof = await verifyPaymentProof(paymentHeader);
     } catch (error) {
-      return res.status(400).json({ error: "Invalid payment format" });
+      return res.status(400).json({
+        error: "Invalid payment proof",
+        details: error instanceof Error ? error.message : "Unknown error",
+      });
     }
 
-    // Verify payment amount matches quote
-    const expectedAmount = formatUSDC(pricing.priceUSD);
-    if (paymentProof.amount !== expectedAmount) {
+    // Look up sender by their authenticated wallet address from payment proof
+    // This prevents spoofing since wallet address is cryptographically verified
+    let isVerifiedHuman = false;
+    const [sender] = await db
+      .select({ verified: users.verified })
+      .from(users)
+      .where(eq(users.walletAddress, paymentProof.sender.toLowerCase()))
+      .limit(1);
+    
+    if (sender) {
+      isVerifiedHuman = sender.verified;
+    }
+    
+    // Calculate pricing with authenticated verification status
+    const pricing = await calculateDynamicPrice({
+      recipientId: recipient.id,
+      isVerifiedHuman,
+    });
+
+    // Verify payment amount matches expected price
+    const paidAmount = parseFloat(paymentProof.amount);
+    if (paidAmount < pricing.priceUSD) {
       return res.status(400).json({
-        error: "Payment amount mismatch",
-        expected: expectedAmount,
-        received: paymentProof.amount,
+        error: "Insufficient payment",
+        required: pricing.priceUSD,
+        paid: paidAmount,
       });
     }
 
