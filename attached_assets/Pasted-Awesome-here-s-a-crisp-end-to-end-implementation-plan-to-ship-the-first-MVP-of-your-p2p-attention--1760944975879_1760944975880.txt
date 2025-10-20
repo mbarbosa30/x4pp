@@ -1,0 +1,155 @@
+Awesome—here’s a crisp, end-to-end implementation plan to ship the first MVP of your “p2p attention market” DMs app on Celo + Self + x402, reusing Julio’s repos. I’ve broken it into phases you can execute sequentially this week.
+
+⸻
+
+0) Scope the MVP (what we’ll actually ship)
+
+User flow
+Compose → Quote (dynamic price, human discount) → Verify (Self) or Skip → Pay (x402) → Delivered to recipient’s next slot → Open = funds released; Unopened by SLA = refund.
+
+Hard requirements
+	•	Self verification for “unique human” + policy booleans; store only the nullifier.  ￼
+	•	x402 pay-per-message over HTTP 402; instant USDC settlement on Celo.  ￼
+	•	Use Julio’s Self-x402 repo pieces: consumer app pattern, Vendors/Places-x402-Api, and Selfx402Facilitator (already set up for Celo mainnet with example envs, chain id 42220, RPC Forno, Self + USDC addresses).  ￼
+
+⸻
+
+1) Repo + environment boot-up (Day 1)
+	1.	Clone: git clone https://github.com/JulioMCruz/Self-x402
+Note key directories:
+	•	Selfx402Facilitator/ (payment verify/settle service)
+	•	Vendors/Places-x402-Api/ (Express API with 402 flow)
+	•	Selfx402App/ (consumer app scaffold)  ￼
+	2.	Set envs (from README examples):
+	•	Selfx402Facilitator/.env: CELO_MAINNET_PRIVATE_KEY, CELO_MAINNET_RPC_URL=https://forno.celo.org
+	•	Vendors/Places-x402-Api/.env: NETWORK=celo, FACILITATOR_URL=http://localhost:3005, PAYMENT_WALLET_ADDRESS, PAYMENT_PRICE_USD (temp)  ￼
+	3.	Run locally (per README):
+	•	cd Selfx402Facilitator && PORT=3005 npx tsx index.ts
+	•	cd Vendors/Places-x402-Api && npm run dev
+	•	Try npm run test:celo to simulate flow.  ￼
+	4.	Chain + contracts (Phase-1 defaults from repo):
+	•	Celo mainnet (42220), USDC 0xcebA...118C, Self verifier 0xe57F...5BF. Keep these configurable; repo shows them for Phase-1.  ￼
+
+⸻
+
+2) Wire the existing frontend (Replit) to the backend (Day 1–2)
+
+Backend base URL: API_BASE (env). Add these API contracts:
+	•	POST /messages/quote → {recipientId, tags?, selfProof?} → returns {priceUSD, discountReason, surgeInfo, requiresProof}
+Logic: read inbox utilization for recipient; compute surge and human discount if selfProof verifies to a valid nullifier. (Details in §4.)
+	•	POST /messages/commit → {message, recipientId, selfProof?}
+If no payment header, respond HTTP 402 with x402 PaymentRequirements JSON; client/wallet pays and retries; then accept and enqueue. (Pattern per x402 seller flow.)  ￼
+	•	POST /messages/open (recipient) → marks delivered as opened and releases “open-earnings.”
+	•	POST /feedback (recipient) → {-1|0|+1} quick reaction for rep score.
+	•	GET /inbox (recipient) → top N scored/paid messages (N = slots).
+
+Frontend changes (minimal):
+	•	Compose screen → call /quote then show “Verify for discount” (Self QR) or “Pay now”.
+	•	When /commit returns 402, hand its payload to the wallet; retry request with the X-PAYMENT header as per x402 pattern.  ￼
+
+⸻
+
+3) Self verification hook (Day 2)
+	1.	Add /verify-self (backend) that uses Self’s backend SDK to verify the proof and return {actionNullifier, policies: {age_ok, ofac_ok, country_ok}, freshness}. Store only the nullifier + last_seen.  ￼
+	2.	Cache proof client-side up to ~90 days (repo’s model) to avoid re-scans.  ￼
+	3.	In /quote, if proof is valid → compute “human tier” price; else unverified tier.
+
+⸻
+
+4) Dynamic pricing & slots (Day 2–3)
+
+Recipient settings: {basePriceUSD, slotsPerHour, surgeAlpha, surgeK, humanDiscountPct, SLA_hours}
+
+Surge floor (posted price MVP):
+
+utilization = queued/slots
+floor = basePriceUSD * (1 + alpha * utilization^k)
+
+Human discount: price = floor * (1 - humanDiscountPct) if Self proof valid; otherwise price = floor.
+Slots: Every minute, if capacity for the hour remains, admit highest-score messages first (score = price × small priority weights). Unused slots roll to next minute; unopened past SLA → refunds.
+(You can move to sealed-bid auctions later; start with posted price + surge.)
+
+⸻
+
+5) Payments over x402 (Day 3)
+	•	On /commit with no payment, respond 402 with a PaymentRequirements body (token=USDC on Celo; amount from §4). Client/wallet signs an EIP-712 auth; your Selfx402Facilitator finalizes via EIP-3009 and returns a proof; client retries request; server accepts and enqueues.  ￼
+	•	Keep payments chain-agnostic in code but default to Celo per Phase-1 in Julio’s repo.  ￼
+
+⸻
+
+6) Refunds & earnings (Day 3–4)
+	•	Open-earnings: when recipient hits Open, mark message opened_at; record earnings.
+	•	Refunds: a cron checks messages now - sent_at > SLA and !opened → refund sender (outbound USDC tx from the facilitator wallet or treasury), minus tiny infra fee. (x402 handles inbound; refunds are a normal outbound transfer.)  ￼
+
+⸻
+
+7) Reputation (MVP) (Day 4)
+
+Compute nightly with exponential decay (half-life ~60–90 days):
+	•	Sender: Wilson-lower-bound open rate and reply rate, minus block/refund rates; + small capped “net contribution” (paid − refunded).
+	•	Recipient: SLA-met rate, open and reply with bounty, low refund rate.
+Expose GET /reputation/:nullifier → {score0to100, facts[]} (e.g., “Opens: 78% (confident); Replies: 41%”).
+All keyed by Self action nullifier (no PII).  ￼
+
+⸻
+
+8) Storage schema (Postgres) (Day 4)
+	•	users(nullifier pk, first_seen, last_seen, flags)
+	•	recipients(id pk, base_price_usd, slots_per_hour, alpha, k, human_discount_pct, sla_hours)
+	•	messages(id, sender_nullifier, recipient_id, body_cipher, price_usd, status, sent_at, opened_at, expires_at)
+	•	payments(message_id fk, amount, chain_id, tx_hash, settled_at)
+	•	feedback(message_id fk, rating int8, by_recipient, at)
+	•	blocks(recipient_id, sender_nullifier, at)
+	•	quotes(message_id fk, utilization, floor_usd, is_human, final_price_usd)
+
+⸻
+
+9) On-chain anchoring (Day 5, optional for MVP)
+
+Anchor a Merkle root of the day’s event hashes to a tiny Celo contract (operator-only setRoot(bytes32)), so scores are auditable later without posting data. Use viem to write the root after each batch. (Keep contract address configurable alongside the Celo RPC in envs from Julio’s repo.)  ￼
+
+⸻
+
+10) Abuse controls (Day 5)
+	•	Throttle: one attempt per sender→recipient per 24h at discounted rate; quadratic cost increase for repeats.
+	•	Blocks: instant denylist by recipient; auto-refund attempts.
+	•	Policy gates: enforce Self policy booleans (age/OFAC/country) at /commit before quoting discounts.  ￼
+
+⸻
+
+11) Observability & admin (Day 5–6)
+	•	Metrics: attempts, delivered, open latency, refunds, revenue (by tier), human vs unverified mix.
+	•	Admin endpoints: adjust recipient pricing and slots; inspect queue; force-refund; block manage.
+
+⸻
+
+12) Test plan (throughout)
+	•	Self verified vs unverified: prove discount is applied, and unverified can still pay at higher floor.
+	•	402 flow: buyer cannot access inbox resource without successful settle; retry unlocks. (Mirror x402 protocol path.)  ￼
+	•	Refunds: simulate missed SLA; ensure outbound USDC refund executes.
+	•	Reputation: seed data to confirm Wilson bounds behave under small-n.
+
+⸻
+
+13) Deploy plan (Day 6–7)
+	•	Backend: deploy Facilitator + API (Render/Fly/Heroku or a small VM). Point Replit frontend to API_BASE.
+	•	Celo infra: Forno RPC (as in repo), rotate facilitator key; set spending limits.  ￼
+	•	Kill-switch: env flag to disable unverified sends (emergency).
+	•	Docs: README with diagrams + endpoint contracts.
+
+⸻
+
+Quick references while building
+	•	Self-x402 repo: structure, Celo network config, env examples, component diagrams.  ￼
+	•	Self Protocol docs: scan passport → ZK proof → app verifies; app only sees booleans + nullifier.  ￼
+	•	x402 protocol: HTTP-native 402 → pay → retry; stablecoin settlement (EIP-712/3009).  ￼
+
+⸻
+
+Acceptance criteria for this first version
+	•	A verified sender sees a discounted quote, pays via x402 on Celo, and message appears in recipient’s next slot.
+	•	An unverified sender can still send, but pays the surge floor.
+	•	If the recipient doesn’t open by SLA, the sender is refunded.
+	•	Basic reputation facts visible on hover (no creepy data), keyed to Self nullifier.
+
+If you want, I can also draft the exact JSON for PaymentRequirements and the /quote response your frontend should expect—happy to hand you those stubs next.

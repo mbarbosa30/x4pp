@@ -72,6 +72,32 @@ export const reputationScores = pgTable("reputation_scores", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+export const payments = pgTable("payments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  messageId: varchar("message_id").notNull(),
+  chainId: integer("chain_id").notNull(),
+  tokenAddress: text("token_address").notNull(),
+  amount: decimal("amount", { precision: 18, scale: 6 }).notNull(),
+  sender: text("sender").notNull(),
+  recipient: text("recipient").notNull(),
+  txHash: text("tx_hash"),
+  status: text("status").notNull().default("pending"), // pending, settled, failed, refunded
+  nonce: text("nonce").notNull().unique(),
+  signature: text("signature"),
+  settledAt: timestamp("settled_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const messageQueue = pgTable("message_queue", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  messageId: varchar("message_id").notNull(),
+  recipientId: varchar("recipient_id").notNull(),
+  priority: decimal("priority", { precision: 10, scale: 4 }).notNull(),
+  slotExpiry: timestamp("slot_expiry").notNull(),
+  status: text("status").notNull().default("queued"), // queued, delivered, expired
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
@@ -102,6 +128,17 @@ export const insertBlockSchema = createInsertSchema(blocks).omit({
   createdAt: true,
 });
 
+export const insertPaymentSchema = createInsertSchema(payments).omit({
+  id: true,
+  createdAt: true,
+  settledAt: true,
+});
+
+export const insertMessageQueueSchema = createInsertSchema(messageQueue).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Types
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
@@ -119,3 +156,9 @@ export type InsertBlock = z.infer<typeof insertBlockSchema>;
 export type Block = typeof blocks.$inferSelect;
 
 export type ReputationScore = typeof reputationScores.$inferSelect;
+
+export type InsertPayment = z.infer<typeof insertPaymentSchema>;
+export type Payment = typeof payments.$inferSelect;
+
+export type InsertMessageQueue = z.infer<typeof insertMessageQueueSchema>;
+export type MessageQueue = typeof messageQueue.$inferSelect;
