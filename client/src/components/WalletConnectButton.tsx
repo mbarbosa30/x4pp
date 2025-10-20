@@ -17,7 +17,7 @@ export default function WalletConnectButton() {
     // TODO: Implement actual wallet connection
     setTimeout(() => {
       setConnected(true);
-      setAddress("0x742d...a8C4");
+      setAddress("alice.eth");
     }, 500);
   };
 

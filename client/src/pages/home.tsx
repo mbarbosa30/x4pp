@@ -15,7 +15,7 @@ import PaymentModal from "@/components/PaymentModal";
 const mockMessages = [
   {
     id: "1",
-    senderAddress: "0x742d35Cc6634C0532925a3b844Bc9e7595f38C4",
+    senderName: "Sarah Chen",
     senderVerified: true,
     messagePreview: "Hey! I'd love to collaborate on your latest project...",
     message: "Hey! I'd love to collaborate on your latest project. I've been following your work for a while and think we could build something amazing together. Let me know if you're interested in chatting more about this.",
@@ -27,7 +27,7 @@ const mockMessages = [
   },
   {
     id: "2",
-    senderAddress: "0x8B3f9eA2c4B7d6A5F1E0a3B9C8D7E6F5A4B3C2D1",
+    senderName: "Alex Rivera",
     senderVerified: false,
     messagePreview: "Quick question about your availability next week",
     message: "Quick question about your availability next week. Would you be open to a consulting call?",
@@ -38,7 +38,7 @@ const mockMessages = [
   },
   {
     id: "3",
-    senderAddress: "0xA1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6Q7R8S9T0",
+    senderName: "David Park",
     senderVerified: true,
     messagePreview: "Invitation to speak at our upcoming conference",
     message: "We'd like to invite you to speak at our upcoming blockchain conference in Miami. We're offering a $5k speaking fee plus travel.",
@@ -97,27 +97,27 @@ export default function Home() {
       </header>
 
       {/* Main Content */}
-      <main className="container mx-auto px-4 py-8">
+      <main className="container mx-auto px-4 py-4 md:py-8">
         <div className="max-w-6xl mx-auto">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="mb-6">
-              <TabsTrigger value="inbox" data-testid="tab-inbox">
-                <Inbox className="h-4 w-4 mr-2" />
-                Inbox
+            <TabsList className="mb-4 md:mb-6 w-full sm:w-auto">
+              <TabsTrigger value="inbox" data-testid="tab-inbox" className="flex-1 sm:flex-initial">
+                <Inbox className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Inbox</span>
               </TabsTrigger>
-              <TabsTrigger value="compose" data-testid="tab-compose">
-                <Mail className="h-4 w-4 mr-2" />
-                Compose
+              <TabsTrigger value="compose" data-testid="tab-compose" className="flex-1 sm:flex-initial">
+                <Mail className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Compose</span>
               </TabsTrigger>
-              <TabsTrigger value="settings" data-testid="tab-settings">
-                <SettingsIcon className="h-4 w-4 mr-2" />
-                Settings
+              <TabsTrigger value="settings" data-testid="tab-settings" className="flex-1 sm:flex-initial">
+                <SettingsIcon className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Settings</span>
               </TabsTrigger>
             </TabsList>
 
             {/* Inbox Tab */}
-            <TabsContent value="inbox" className="space-y-6">
-              <div className="flex items-center justify-between">
+            <TabsContent value="inbox" className="space-y-4 md:space-y-6">
+              <div className="overflow-x-auto">
                 <AttentionSlots totalSlots={5} usedSlots={3} timeWindow="hour" />
               </div>
 
@@ -131,7 +131,7 @@ export default function Home() {
                     ← Back to inbox
                   </Button>
                   <MessageDetail
-                    senderAddress={message.senderAddress}
+                    senderName={message.senderName}
                     senderVerified={message.senderVerified}
                     message={message.message}
                     amount={message.amount}

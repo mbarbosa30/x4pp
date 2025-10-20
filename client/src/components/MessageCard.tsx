@@ -7,7 +7,7 @@ import VerificationBadge from "./VerificationBadge";
 
 interface MessageCardProps {
   id: string;
-  senderAddress: string;
+  senderName: string;
   senderVerified: boolean;
   messagePreview: string;
   amount: number;
@@ -18,7 +18,7 @@ interface MessageCardProps {
 
 export default function MessageCard({
   id,
-  senderAddress,
+  senderName,
   senderVerified,
   messagePreview,
   amount,
@@ -28,8 +28,8 @@ export default function MessageCard({
 }: MessageCardProps) {
   const [isHovered, setIsHovered] = useState(false);
 
-  const getInitials = (address: string) => {
-    return address.slice(2, 4).toUpperCase();
+  const getInitials = (name: string) => {
+    return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   };
 
   return (
@@ -45,14 +45,14 @@ export default function MessageCard({
       <div className="flex items-center gap-4">
         <Avatar className="h-12 w-12">
           <AvatarFallback className="bg-primary/10 text-primary font-medium">
-            {getInitials(senderAddress)}
+            {getInitials(senderName)}
           </AvatarFallback>
         </Avatar>
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            <span className={`font-mono text-sm ${!opened ? "font-semibold" : ""}`} data-testid="text-sender">
-              {senderAddress}
+            <span className={`text-sm ${!opened ? "font-semibold" : ""}`} data-testid="text-sender">
+              {senderName}
             </span>
             <VerificationBadge verified={senderVerified} size="sm" />
           </div>

@@ -10,7 +10,7 @@ import VerificationBadge from "./VerificationBadge";
 import { useToast } from "@/hooks/use-toast";
 
 interface MessageDetailProps {
-  senderAddress: string;
+  senderName: string;
   senderVerified: boolean;
   message: string;
   amount: number;
@@ -22,7 +22,7 @@ interface MessageDetailProps {
 }
 
 export default function MessageDetail({
-  senderAddress,
+  senderName,
   senderVerified,
   message,
   amount,
@@ -36,8 +36,8 @@ export default function MessageDetail({
   const [showReply, setShowReply] = useState(false);
   const { toast } = useToast();
 
-  const getInitials = (address: string) => {
-    return address.slice(2, 4).toUpperCase();
+  const getInitials = (name: string) => {
+    return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   };
 
   const handleReply = () => {
@@ -70,14 +70,14 @@ export default function MessageDetail({
         <div className="flex items-start gap-4">
           <Avatar className="h-14 w-14">
             <AvatarFallback className="bg-primary/10 text-primary font-medium text-lg">
-              {getInitials(senderAddress)}
+              {getInitials(senderName)}
             </AvatarFallback>
           </Avatar>
 
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-1">
-              <span className="font-mono text-sm font-semibold" data-testid="text-sender-address">
-                {senderAddress}
+              <span className="text-sm font-semibold" data-testid="text-sender-address">
+                {senderName}
               </span>
               <VerificationBadge verified={senderVerified} size="md" />
             </div>

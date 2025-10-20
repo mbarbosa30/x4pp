@@ -10,7 +10,7 @@ export default function AttentionSlots({ totalSlots, usedSlots, timeWindow = "ho
   const availableSlots = totalSlots - usedSlots;
   
   return (
-    <div className="flex items-center gap-4" data-testid="attention-slots">
+    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4" data-testid="attention-slots">
       <div className="flex gap-2">
         {Array.from({ length: totalSlots }).map((_, i) => (
           <div
