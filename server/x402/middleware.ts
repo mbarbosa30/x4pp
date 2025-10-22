@@ -128,6 +128,13 @@ async function verifyPayment(
     // Verify amount matches (with small tolerance for rounding)
     const tokenDecimals = expectedTokenDecimals || 6;
     const { parseUnits } = await import('viem');
+    
+    // Validate expectedAmountUSD
+    if (typeof expectedAmountUSD !== 'number' || isNaN(expectedAmountUSD) || expectedAmountUSD <= 0) {
+      console.log(`[Payment Verification] FAILED: Invalid expectedAmountUSD: ${expectedAmountUSD}`);
+      return false;
+    }
+    
     const expectedAmountBigInt = parseUnits(expectedAmountUSD.toFixed(tokenDecimals), tokenDecimals);
     const expectedAmount = expectedAmountBigInt.toString();
     const proofAmountBigInt = BigInt(proof.amount);
