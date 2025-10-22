@@ -10,10 +10,15 @@ export const users = pgTable("users", {
   walletAddress: text("wallet_address"), // Celo wallet address for receiving payments
   displayName: text("display_name").notNull(),
   basePrice: decimal("base_price", { precision: 10, scale: 2 }).notNull().default("0.05"),
-  surgeMultiplier: decimal("surge_multiplier", { precision: 4, scale: 2 }).notNull().default("2.0"),
+  surgeAlpha: decimal("surge_alpha", { precision: 4, scale: 2 }).notNull().default("1.5"), // Surge pricing coefficient
+  surgeK: decimal("surge_k", { precision: 4, scale: 2 }).notNull().default("2.0"), // Surge pricing exponent
+  humanDiscountPct: decimal("human_discount_pct", { precision: 5, scale: 2 }).notNull().default("0.90"), // 90% discount for verified humans
   slotsPerWindow: integer("slots_per_window").notNull().default(5),
   timeWindow: text("time_window").notNull().default("hour"),
+  slaHours: integer("sla_hours").notNull().default(24), // Hours before auto-refund
   verified: boolean("verified").notNull().default(false),
+  verifiedAt: timestamp("verified_at"),
+  selfPolicies: text("self_policies"), // JSON: {age_ok, ofac_ok, country_ok}
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -26,7 +31,9 @@ export const messages = pgTable("messages", {
   content: text("content").notNull(),
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
   replyBounty: decimal("reply_bounty", { precision: 10, scale: 2 }),
+  status: text("status").notNull().default("pending"), // pending, delivered, opened, replied, refunded, expired
   sentAt: timestamp("sent_at").notNull().defaultNow(),
+  expiresAt: timestamp("expires_at").notNull(), // SLA deadline for auto-refund
   openedAt: timestamp("opened_at"),
   repliedAt: timestamp("replied_at"),
   refundedAt: timestamp("refunded_at"),
@@ -103,6 +110,7 @@ export const messageQueue = pgTable("message_queue", {
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   createdAt: true,
+  verifiedAt: true,
 });
 
 export const insertMessageSchema = createInsertSchema(messages).omit({
@@ -111,6 +119,8 @@ export const insertMessageSchema = createInsertSchema(messages).omit({
   openedAt: true,
   repliedAt: true,
   refundedAt: true,
+}).extend({
+  expiresAt: z.string().datetime().optional(),
 });
 
 export const insertReputationEventSchema = createInsertSchema(reputationEvents).omit({
