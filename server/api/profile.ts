@@ -6,16 +6,33 @@ import { eq, sql, and } from "drizzle-orm";
 const router = Router();
 
 // Get user profile with statistics
-router.get("/:username", async (req, res) => {
+// Accepts either username or wallet address
+router.get("/:identifier", async (req, res) => {
   try {
-    const { username } = req.params;
+    const { identifier } = req.params;
 
-    // Get user data
+    // Determine if identifier is a wallet address (starts with 0x and is 42 chars)
+    const isWalletAddress = identifier.startsWith('0x') && identifier.length === 42;
+    
+    // Get user data by username or wallet address
     const [user] = await db
       .select()
       .from(users)
-      .where(eq(users.username, username))
+      .where(isWalletAddress 
+        ? eq(users.walletAddress, identifier.toLowerCase())
+        : eq(users.username, identifier)
+      )
       .limit(1);
+
+    // If wallet address is provided but no user found, return minimal data
+    if (!user && isWalletAddress) {
+      return res.json({
+        walletAddress: identifier.toLowerCase(),
+        isRegistered: false,
+        minBasePrice: "0.10", // Platform default for unregistered wallets
+        message: "This wallet hasn't registered yet. Messages sent will be visible when they register."
+      });
+    }
 
     if (!user) {
       return res.status(404).json({ error: "User not found" });
@@ -23,7 +40,7 @@ router.get("/:username", async (req, res) => {
 
     // Check if profile is public or if user is viewing their own profile
     const authenticatedUser = (req as any).session?.username;
-    const isOwner = authenticatedUser === username;
+    const isOwner = authenticatedUser === user.username;
     
     if (!user.isPublic && !isOwner) {
       // Profile is private - return minimal information
