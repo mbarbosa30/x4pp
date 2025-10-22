@@ -130,27 +130,27 @@ export default function Landing() {
                 <div className="flex gap-3">
                   <Check className="h-5 w-5 text-success mt-0.5 flex-shrink-0" />
                   <div>
-                    <p className="font-medium">Set your minimum base price</p>
+                    <p className="font-medium">No more spam</p>
                     <p className="text-sm text-muted-foreground">
-                      The lowest bid you'll accept, starting from $0.01
+                      Only see messages from people willing to pay your rate
                     </p>
                   </div>
                 </div>
                 <div className="flex gap-3">
                   <Check className="h-5 w-5 text-success mt-0.5 flex-shrink-0" />
                   <div>
-                    <p className="font-medium">Accept or decline each bid</p>
+                    <p className="font-medium">Choose what to read</p>
                     <p className="text-sm text-muted-foreground">
-                      Full control—choose which messages to read
+                      Review each message and accept only the ones worth your time
                     </p>
                   </div>
                 </div>
                 <div className="flex gap-3">
                   <Check className="h-5 w-5 text-success mt-0.5 flex-shrink-0" />
                   <div>
-                    <p className="font-medium">Set your response SLA</p>
+                    <p className="font-medium">Earn from your attention</p>
                     <p className="text-sm text-muted-foreground">
-                      Bids expire if you don't respond within your timeframe
+                      Get paid in USDC for every message you accept
                     </p>
                   </div>
                 </div>
@@ -159,7 +159,7 @@ export default function Landing() {
                   <div>
                     <p className="font-medium">Share your link</p>
                     <p className="text-sm text-muted-foreground">
-                      Like Calendly, but for paid messages
+                      Like Calendly, but for getting paid to read
                     </p>
                   </div>
                 </div>
