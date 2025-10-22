@@ -15,7 +15,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
 const registrationFormSchema = z.object({
   username: z.string()
@@ -86,15 +86,17 @@ export default function Register() {
       const response = await apiRequest("POST", "/api/users", data);
       return await response.json();
     },
-    onSuccess: (data: any) => {
+    onSuccess: async (data: any) => {
       toast({
         title: "Account created!",
         description: `Welcome @${data.user.username}!`,
       });
-      // Reload to ensure session is picked up properly
-      setTimeout(() => {
-        window.location.href = "/app";
-      }, 1000);
+      
+      // Invalidate auth cache to pick up the new session
+      await queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+      
+      // Use React Router navigation instead of full reload
+      setLocation("/app");
     },
     onError: (error: any) => {
       toast({
