@@ -5,7 +5,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Send, Shield, Wallet, TrendingUp, Info } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Send, Shield, Wallet, TrendingUp, Info, Clock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { useWallet } from "@/providers/WalletProvider";
@@ -30,6 +31,7 @@ export default function ComposeMessage({ isVerified, onSend }: ComposeMessagePro
   const [bidAmount, setBidAmount] = useState(0.10);
   const [replyBounty, setReplyBounty] = useState(0);
   const [includeReplyBounty, setIncludeReplyBounty] = useState(false);
+  const [expirationHours, setExpirationHours] = useState(24); // Default: 24 hours
   const { toast } = useToast();
   const { address: walletAddress, isConnected, connect } = useWallet();
   
@@ -123,7 +125,7 @@ export default function ComposeMessage({ isVerified, onSend }: ComposeMessagePro
     setIsSubmitting(true);
 
     try {
-      // Step 1: Generate commit payload with bid amount
+      // Step 1: Generate commit payload with bid amount and expiration
       const commitRequest = {
         recipientUsername: recipient,
         senderNullifier: isVerified ? "demo_verified_user_001" : undefined,
@@ -131,6 +133,7 @@ export default function ComposeMessage({ isVerified, onSend }: ComposeMessagePro
         content: message,
         bidUsd: bidAmount.toFixed(2),
         replyBounty: includeReplyBounty ? replyBounty.toFixed(2) : undefined,
+        expirationHours: expirationHours,
       };
 
       // Save the payload for potential retry after payment
@@ -170,6 +173,7 @@ export default function ComposeMessage({ isVerified, onSend }: ComposeMessagePro
         setBidAmount(0.10);
         setIncludeReplyBounty(false);
         setReplyBounty(0);
+        setExpirationHours(24);
         setPaymentRequirements(null);
         setPriceGuide(null);
         setOriginalCommitPayload(null);
@@ -287,6 +291,7 @@ export default function ComposeMessage({ isVerified, onSend }: ComposeMessagePro
         setBidAmount(0.10);
         setIncludeReplyBounty(false);
         setReplyBounty(0);
+        setExpirationHours(24);
         setPaymentRequirements(null);
         setPriceGuide(null);
         setOriginalCommitPayload(null);
@@ -459,6 +464,33 @@ export default function ComposeMessage({ isVerified, onSend }: ComposeMessagePro
             </div>
           </div>
         )}
+
+        {/* Expiration Time Selector */}
+        <div className="border-t pt-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Clock className="h-4 w-4 text-muted-foreground" />
+            <Label htmlFor="expiration-hours">Bid Valid For</Label>
+          </div>
+          <Select 
+            value={expirationHours.toString()} 
+            onValueChange={(value) => setExpirationHours(parseFloat(value))}
+          >
+            <SelectTrigger id="expiration-hours" className="max-w-48" data-testid="select-expiration">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="1">1 hour</SelectItem>
+              <SelectItem value="6">6 hours</SelectItem>
+              <SelectItem value="24">24 hours (1 day)</SelectItem>
+              <SelectItem value="48">48 hours (2 days)</SelectItem>
+              <SelectItem value="72">72 hours (3 days)</SelectItem>
+              <SelectItem value="168">168 hours (7 days)</SelectItem>
+            </SelectContent>
+          </Select>
+          <div className="text-xs text-muted-foreground mt-1">
+            Your bid will expire if not accepted within this time
+          </div>
+        </div>
 
         <div className="flex items-center gap-3">
           <Switch
