@@ -102,10 +102,11 @@ export function generatePaymentRequirements(
   const finalTokenDecimals = tokenDecimals || 6;
   const finalChainId = chainId || 42220;
   
-  const tokenAmount = parseUnits(amountUsd.toFixed(finalTokenDecimals), finalTokenDecimals);
+  // Convert USD to smallest token units (e.g., 0.01 USD = 10000 for 6 decimal token)
+  const tokenAmountInSmallestUnits = Math.floor(amountUsd * Math.pow(10, finalTokenDecimals));
   
   return {
-    amount: tokenAmount.toString(),
+    amount: tokenAmountInSmallestUnits.toString(),
     currency: finalTokenSymbol,
     recipient: recipientWallet as Address,
     network: {
