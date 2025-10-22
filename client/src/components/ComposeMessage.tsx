@@ -53,7 +53,11 @@ export default function ComposeMessage({ isVerified, onSend }: ComposeMessagePro
     const fetchPriceGuide = async () => {
       setIsLoadingPriceGuide(true);
       try {
-        const response = await fetch(`/api/price-guide/${recipient}`);
+        // Auto-detect if input is wallet address or username
+        const isWalletAddress = recipient.startsWith('0x') && recipient.length === 42;
+        const identifier = isWalletAddress ? recipient : recipient.replace(/^@/, '');
+        
+        const response = await fetch(`/api/price-guide/${identifier}`);
 
         if (response.ok) {
           const data = await response.json();
@@ -126,8 +130,11 @@ export default function ComposeMessage({ isVerified, onSend }: ComposeMessagePro
 
     try {
       // Step 1: Generate commit payload with bid amount and expiration
+      // Auto-detect if recipient is wallet address or username
+      const isWalletAddress = recipient.startsWith('0x') && recipient.length === 42;
       const commitRequest = {
-        recipientUsername: recipient,
+        recipientUsername: isWalletAddress ? undefined : recipient.replace(/^@/, ''),
+        recipientWallet: isWalletAddress ? recipient.toLowerCase() : undefined,
         senderWallet: walletAddress, // Use connected wallet address as identifier
         senderName: "Demo Sender",
         content: message,
@@ -319,15 +326,18 @@ export default function ComposeMessage({ isVerified, onSend }: ComposeMessagePro
     <Card className="p-4 sm:p-6">
       <div className="space-y-6">
         <div>
-          <Label htmlFor="recipient">Recipient Username</Label>
+          <Label htmlFor="recipient">Recipient (username or wallet)</Label>
           <Input
             id="recipient"
-            placeholder="username"
+            placeholder="username or 0x..."
             value={recipient}
             onChange={(e) => setRecipient(e.target.value)}
             className="mt-2"
             data-testid="input-recipient"
           />
+          <div className="text-xs text-muted-foreground mt-1">
+            Enter a username (e.g., alice) or wallet address (e.g., 0x1234...)
+          </div>
         </div>
 
         <div>
@@ -403,6 +413,7 @@ export default function ComposeMessage({ isVerified, onSend }: ComposeMessagePro
                     <Input
                       id="bid-amount"
                       type="number"
+                      lang="en-US"
                       step="0.01"
                       min={priceGuide.minBaseUsd}
                       value={bidAmount}
@@ -506,6 +517,7 @@ export default function ComposeMessage({ isVerified, onSend }: ComposeMessagePro
             {includeReplyBounty && (
               <Input
                 type="number"
+                lang="en-US"
                 step="0.01"
                 min="0"
                 placeholder="0.00"

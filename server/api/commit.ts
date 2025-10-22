@@ -20,11 +20,14 @@ const router = Router();
  */
 router.post("/", async (req, res) => {
   try {
-    const { recipientIdentifier, content, senderWallet, senderName, senderEmail, replyBounty, bidUsd, expirationHours } = req.body;
+    const { recipientIdentifier, recipientUsername, content, senderWallet, senderName, senderEmail, replyBounty, bidUsd, expirationHours } = req.body;
 
-    if (!recipientIdentifier || !content || !senderName || !bidUsd || !senderWallet) {
+    // Support both old (recipientIdentifier) and new (recipientUsername/recipientWallet) formats
+    const identifier = recipientIdentifier || recipientUsername || req.body.recipientWallet;
+
+    if (!identifier || !content || !senderName || !bidUsd || !senderWallet) {
       return res.status(400).json({ 
-        error: "recipientIdentifier, content, senderName, senderWallet, and bidUsd are required" 
+        error: "recipient (username or wallet), content, senderName, senderWallet, and bidUsd are required" 
       });
     }
     
@@ -44,7 +47,7 @@ router.post("/", async (req, res) => {
     }
 
     // Determine if identifier is a wallet address or username
-    const isWalletAddress = recipientIdentifier.startsWith('0x') && recipientIdentifier.length === 42;
+    const isWalletAddress = identifier.startsWith('0x') && identifier.length === 42;
     
     // Find recipient with their selected payment token
     const result = await db
@@ -55,8 +58,8 @@ router.post("/", async (req, res) => {
       .from(users)
       .leftJoin(tokens, eq(users.tokenId, tokens.id))
       .where(isWalletAddress
-        ? eq(users.walletAddress, recipientIdentifier.toLowerCase())
-        : eq(users.username, recipientIdentifier)
+        ? eq(users.walletAddress, identifier.toLowerCase())
+        : eq(users.username, identifier)
       )
       .limit(1);
 
@@ -72,7 +75,7 @@ router.post("/", async (req, res) => {
       }
       
       // Unregistered wallet address - use platform defaults
-      recipientWallet = recipientIdentifier.toLowerCase();
+      recipientWallet = identifier.toLowerCase();
       minBasePrice = PLATFORM_DEFAULT_MIN_BID;
       
       // Get default USDC token for payments to unregistered wallets
