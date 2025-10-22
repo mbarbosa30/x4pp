@@ -80,38 +80,38 @@ export default function Landing() {
               How it works
             </h2>
             <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              Three simple steps to protect your attention and earn from messages
+              A spam-free inbox where quality messages get through
             </p>
           </div>
 
           <div className="grid md:grid-cols-3 gap-8">
             <Card className="p-6 space-y-4">
               <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
-                <TrendingUp className="h-6 w-6 text-primary" />
+                <Mail className="h-6 w-6 text-primary" />
               </div>
-              <h3 className="text-xl font-semibold">Place your bid</h3>
+              <h3 className="text-xl font-semibold">Send your message</h3>
               <p className="text-muted-foreground">
-                See what others are bidding (P25/median/P75) and choose your offer. No locked funds—just sign an authorization.
+                See what others are paying and send your message with a fair offer. Your money stays in your wallet.
               </p>
             </Card>
 
             <Card className="p-6 space-y-4">
               <div className="h-12 w-12 rounded-lg bg-success/10 flex items-center justify-center">
-                <Users className="h-6 w-6 text-success" />
+                <Shield className="h-6 w-6 text-success" />
               </div>
-              <h3 className="text-xl font-semibold">Receiver decides</h3>
+              <h3 className="text-xl font-semibold">Choose what to read</h3>
               <p className="text-muted-foreground">
-                Recipients see all pending bids and manually accept or decline each one. Full control over their inbox.
+                Review incoming messages and accept the ones worth your time. Full control over your attention.
               </p>
             </Card>
 
             <Card className="p-6 space-y-4">
               <div className="h-12 w-12 rounded-lg bg-price/10 flex items-center justify-center">
-                <Wallet className="h-6 w-6 text-price" />
+                <DollarSign className="h-6 w-6 text-price" />
               </div>
-              <h3 className="text-xl font-semibold">Instant settlement</h3>
+              <h3 className="text-xl font-semibold">Get paid instantly</h3>
               <p className="text-muted-foreground">
-                On accept, USDC transfers on-chain. On decline or expiry, your funds never left your wallet.
+                When you accept, payment transfers automatically. When you decline, the sender keeps their money.
               </p>
             </Card>
           </div>
