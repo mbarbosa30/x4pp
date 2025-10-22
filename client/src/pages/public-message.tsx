@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useRoute } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,44 +8,82 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Mail, DollarSign, Shield, Send, TrendingUp } from "lucide-react";
-import VerificationBadge from "@/components/VerificationBadge";
+import { Mail, DollarSign, Send, Loader2 } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
-import PaymentModal from "@/components/PaymentModal";
-import VerificationModal from "@/components/VerificationModal";
+import { useAccount } from "wagmi";
+import { useToast } from "@/hooks/use-toast";
+
+type ProfileData = {
+  username: string | null;
+  walletAddress: string;
+  minBasePrice: string;
+  isPublic: boolean;
+};
 
 export default function PublicMessage() {
-  const [, params] = useRoute("/@:username");
-  const username = params?.username || "user";
+  const [, params] = useRoute("/@:identifier");
+  const identifier = params?.identifier || "";
+  const { address } = useAccount();
+  const { toast } = useToast();
   
   const [senderName, setSenderName] = useState("");
   const [senderEmail, setSenderEmail] = useState("");
   const [message, setMessage] = useState("");
-  const [isVerified, setIsVerified] = useState(false);
-  const [showPayment, setShowPayment] = useState(false);
-  const [showVerification, setShowVerification] = useState(false);
+  const [bidAmount, setBidAmount] = useState("");
 
-  // TODO: Fetch user settings from backend
-  const userSettings = {
-    displayName: username.charAt(0).toUpperCase() + username.slice(1),
-    basePrice: 0.05,
-    surgeMultiplier: 2.0,
-    slotsAvailable: 3,
-    totalSlots: 5,
-    verified: true,
-  };
+  // Fetch profile data
+  const { data: profile, isLoading } = useQuery<ProfileData>({
+    queryKey: ["/api/profile", identifier],
+    enabled: !!identifier,
+  });
 
-  const currentPrice = isVerified 
-    ? userSettings.basePrice * userSettings.surgeMultiplier * 0.2
-    : userSettings.basePrice * userSettings.surgeMultiplier;
+  const isWalletAddress = identifier.startsWith('0x') && identifier.length === 42;
+  const minBid = profile ? parseFloat(profile.minBasePrice) : (isWalletAddress ? 0.10 : 0.05);
+  const displayName = profile?.username || (isWalletAddress ? `${identifier.slice(0, 6)}...${identifier.slice(-4)}` : identifier);
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!senderName || !message) {
-      alert("Please fill in your name and message");
+      toast({
+        title: "Missing information",
+        description: "Please fill in your name and message",
+        variant: "destructive",
+      });
       return;
     }
-    setShowPayment(true);
+
+    if (!address) {
+      toast({
+        title: "Wallet not connected",
+        description: "Please connect your wallet to send a message",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const bid = bidAmount ? parseFloat(bidAmount) : minBid;
+    if (isNaN(bid) || bid < minBid) {
+      toast({
+        title: "Invalid bid",
+        description: `Bid must be at least $${minBid.toFixed(2)}`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // TODO: Implement actual message sending with payment
+    toast({
+      title: "Feature in progress",
+      description: "Message sending will be implemented soon",
+    });
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" data-testid="loader-profile" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -66,60 +105,40 @@ export default function PublicMessage() {
           <div className="text-center space-y-4">
             <Avatar className="h-20 w-20 md:h-24 md:w-24 mx-auto">
               <AvatarFallback className="bg-primary/10 text-primary font-semibold text-2xl md:text-3xl">
-                {userSettings.displayName.charAt(0)}
+                {displayName.charAt(0).toUpperCase()}
               </AvatarFallback>
             </Avatar>
             <div>
-              <div className="flex items-center justify-center gap-2 mb-2">
-                <h1 className="text-2xl md:text-3xl font-bold" data-testid="text-username">
-                  {userSettings.displayName}
-                </h1>
-                <VerificationBadge verified={userSettings.verified} size="lg" />
-              </div>
-              <p className="text-muted-foreground">@{username}</p>
+              <h1 className="text-2xl md:text-3xl font-bold mb-2" data-testid="text-username">
+                {displayName}
+              </h1>
+              {profile?.username && (
+                <p className="text-muted-foreground">@{profile.username}</p>
+              )}
+              {!profile && isWalletAddress && (
+                <Badge variant="outline" className="mt-2">Unregistered Wallet</Badge>
+              )}
             </div>
             <p className="text-muted-foreground max-w-md mx-auto">
-              Send me a message. I'll receive it if it's in my top {userSettings.totalSlots} highest-paying messages this hour.
+              Send a message with an open bid. The recipient will review and accept or decline your message.
             </p>
           </div>
 
           {/* Pricing Info */}
-          <Card className="p-6 bg-gradient-to-br from-primary/5 to-success/5">
+          <Card className="p-6">
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Current price</span>
-                {userSettings.surgeMultiplier > 1 && (
-                  <Badge variant="outline" className="bg-warning/10 border-warning/20 text-warning">
-                    <TrendingUp className="h-3 w-3 mr-1" />
-                    {userSettings.surgeMultiplier}x surge
-                  </Badge>
-                )}
+                <span className="text-sm text-muted-foreground">Minimum bid</span>
               </div>
               <div className="flex items-baseline gap-2">
-                <DollarSign className="h-5 w-5 text-price" />
-                <span className="text-4xl font-bold tabular-nums text-price" data-testid="text-current-price">
-                  {currentPrice.toFixed(2)}
+                <DollarSign className="h-5 w-5 text-primary" />
+                <span className="text-4xl font-bold tabular-nums" data-testid="text-min-bid">
+                  {minBid.toFixed(2)}
                 </span>
                 <span className="text-muted-foreground">USDC</span>
               </div>
-              {!isVerified && (
-                <div className="flex items-center justify-between pt-2 border-t">
-                  <span className="text-sm text-muted-foreground">
-                    Verify as human for ${(currentPrice * 0.2).toFixed(2)}
-                  </span>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => setShowVerification(true)}
-                    data-testid="button-verify"
-                  >
-                    <Shield className="h-3 w-3 mr-2" />
-                    Verify
-                  </Button>
-                </div>
-              )}
               <div className="text-xs text-muted-foreground pt-2 border-t">
-                {userSettings.slotsAvailable} of {userSettings.totalSlots} slots available this hour
+                Set your bid amount to increase your chances of acceptance
               </div>
             </div>
           </Card>
@@ -154,6 +173,25 @@ export default function PublicMessage() {
               </div>
 
               <div>
+                <Label htmlFor="bid">Your bid (USDC)</Label>
+                <Input
+                  id="bid"
+                  type="number"
+                  lang="en-US"
+                  step="0.01"
+                  min={minBid}
+                  placeholder={`Minimum ${minBid.toFixed(2)}`}
+                  value={bidAmount}
+                  onChange={(e) => setBidAmount(e.target.value)}
+                  className="mt-2"
+                  data-testid="input-bid-amount"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Minimum: ${minBid.toFixed(2)} USDC
+                </p>
+              </div>
+
+              <div>
                 <Label htmlFor="message">Your message</Label>
                 <Textarea
                   id="message"
@@ -174,41 +212,22 @@ export default function PublicMessage() {
                 onClick={handleSend} 
                 className="w-full"
                 size="lg"
+                disabled={!address}
                 data-testid="button-send-message"
               >
                 <Send className="h-4 w-4 mr-2" />
-                Send Message for ${currentPrice.toFixed(2)} USDC
+                {address ? "Send Message" : "Connect Wallet to Send"}
               </Button>
 
               <div className="text-center text-xs text-muted-foreground space-y-1">
-                <p>✓ Messages compete for attention slots</p>
-                <p>✓ Unopened after deadline? Automatic refund</p>
+                <p>✓ Funds stay in your wallet until recipient accepts</p>
+                <p>✓ Automatic refund if message expires</p>
                 <p>✓ All payments in USDC on Celo</p>
               </div>
             </div>
           </Card>
         </div>
       </main>
-
-      {/* Modals */}
-      <VerificationModal
-        open={showVerification}
-        onClose={() => setShowVerification(false)}
-        onVerified={() => setIsVerified(true)}
-      />
-
-      <PaymentModal
-        open={showPayment}
-        onClose={() => setShowPayment(false)}
-        amount={currentPrice}
-        recipient={userSettings.displayName}
-        onConfirm={() => {
-          console.log("Message sent:", { senderName, senderEmail, message });
-          setSenderName("");
-          setSenderEmail("");
-          setMessage("");
-        }}
-      />
     </div>
   );
 }
