@@ -1,6 +1,6 @@
 import { db } from "../db";
-import { messages, payments, messageQueue } from "@shared/schema";
-import { eq, and, isNull, lt, sql } from "drizzle-orm";
+import { messages, payments } from "@shared/schema";
+import { eq, and, isNull, lt } from "drizzle-orm";
 import { logReputationEvent } from "../reputation";
 
 export interface RefundResult {
@@ -17,59 +17,52 @@ export async function processExpiredMessages(): Promise<RefundResult[]> {
   const now = new Date();
 
   try {
-    // Find messages past SLA that haven't been opened
+    // Find messages past expiration that haven't been accepted or refunded
+    // In the new system: messages have status 'pending', 'accepted', 'declined', 'expired'
     const expiredMessages = await db
       .select({
         message: messages,
-        queue: messageQueue,
         payment: payments,
       })
-      .from(messageQueue)
-      .innerJoin(messages, eq(messageQueue.messageId, messages.id))
+      .from(messages)
       .leftJoin(payments, eq(payments.messageId, messages.id))
       .where(
         and(
-          isNull(messages.openedAt),
+          eq(messages.status, "pending"),
           isNull(messages.refundedAt),
-          lt(messageQueue.slotExpiry, now),
-          eq(messageQueue.status, "delivered")
+          lt(messages.expiresAt, now)
         )
       );
 
     for (const row of expiredMessages) {
-      const { message, queue, payment } = row;
+      const { message, payment } = row;
 
       try {
         // Execute refund
-        const refundSuccess = await executeRefund(message.id, payment, "SLA expired - message not opened");
+        const refundSuccess = await executeRefund(message.id, payment, "Bid expired - message not accepted");
 
         if (refundSuccess) {
-          // Mark message as refunded
+          // Mark message as expired and refunded
           await db
             .update(messages)
             .set({
+              status: "expired",
               refundedAt: now,
-              refundReason: "SLA expired - message not opened",
+              refundReason: "Bid expired - message not accepted",
             })
             .where(eq(messages.id, message.id));
 
-          // Update queue status
-          await db
-            .update(messageQueue)
-            .set({ status: "expired" })
-            .where(eq(messageQueue.id, queue.id));
-
           // Log reputation event
-          await logReputationEvent(message.senderNullifier, "refunded", message.id, {
-            reason: "sla_expired",
+          await logReputationEvent(message.senderWallet, "refunded", message.id, {
+            reason: "bid_expired",
           });
-          await logReputationEvent(message.recipientNullifier, "missed_sla", message.id);
+          await logReputationEvent(message.recipientWallet, "missed_sla", message.id);
 
           results.push({
             messageId: message.id,
-            amount: parseFloat(message.amount),
-            sender: message.senderNullifier,
-            reason: "SLA expired",
+            amount: parseFloat(message.bidUsd),
+            sender: message.senderWallet,
+            reason: "Bid expired",
             success: true,
           });
         }
@@ -77,8 +70,8 @@ export async function processExpiredMessages(): Promise<RefundResult[]> {
         console.error(`Refund failed for message ${message.id}:`, error);
         results.push({
           messageId: message.id,
-          amount: parseFloat(message.amount),
-          sender: message.senderNullifier,
+          amount: parseFloat(message.bidUsd),
+          sender: message.senderWallet,
           reason: "Refund processing error",
           success: false,
         });
@@ -166,12 +159,13 @@ export async function issueManualRefund(
       await db
         .update(messages)
         .set({
+          status: "expired",
           refundedAt: new Date(),
           refundReason: reason,
         })
         .where(eq(messages.id, messageId));
 
-      await logReputationEvent(message.senderNullifier, "refunded", messageId, {
+      await logReputationEvent(message.senderWallet, "refunded", messageId, {
         reason: "manual",
         note: reason,
       });
