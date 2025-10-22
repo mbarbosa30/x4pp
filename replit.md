@@ -5,6 +5,19 @@
 x4pp is a peer-to-peer messaging application with an innovative "attention market" model where sending messages requires humanity verification and dynamic pricing. The app enables users to monetize their attention by setting prices for incoming messages, with built-in protections against spam through verification gates and surge pricing mechanisms.
 
 **Recent Updates (Oct 22, 2025):**
+- **Session-Based Authentication System Implemented ✅**: Fixed settings screen data synchronization
+  - Backend: express-session with PostgreSQL store for persistent sessions
+  - Backend: Auto-login after registration (sets userId and username in session)
+  - Backend: Auth endpoints: GET /api/auth/me, POST /api/auth/login, POST /api/auth/logout
+  - Frontend: useAuth hook with React Query for current user state management
+  - Frontend: SettingsPanel now uses authenticated user instead of hardcoded "demo_user"
+  - Testing: Full E2E flow validated (register → auto-login → settings shows correct data)
+- **User Registration System Complete ✅**: Real users with real Celo wallets
+  - Backend: Strict Zod validation for all pricing fields with proper ranges
+  - Backend: SHA-256 nullifier generation from wallet address for uniqueness
+  - Backend: Duplicate detection for username, wallet address, and nullifier
+  - Frontend: react-hook-form with zodResolver and shadcn Form components
+  - Frontend: Wallet connection requirement before registration
 - **Celo Blockchain Integration Complete ✅**: Full USDC payment system on Celo mainnet
   - Backend: Payment verification using EIP-3009 `transferWithAuthorization` for gasless transfers
   - Backend: Auto-refund system executes real on-chain USDC refunds
@@ -17,9 +30,9 @@ x4pp is a peer-to-peer messaging application with an innovative "attention marke
 - Added wagmi/viem integration for Web3 wallet interactions
 
 **Next Steps:**
-- Manual wallet testing on Celo mainnet/testnet with real MetaMask integration
+- Manual UI testing: wallet connect → registration → settings validation
+- Add automated integration tests for auth flow and registration
 - Monitor production logs for on-chain settlement and refund execution
-- Address minor BigInt parsing issue when handling decimal amount strings (backlog item)
 
 Key features include:
 - **Proof-of-humanity gating**: Verified humans pay discounted rates; unverified users can still send but at higher prices
@@ -133,10 +146,16 @@ Preferred communication style: Simple, everyday language.
 ### Authentication and Authorization
 
 **Implemented:**
+- **Session-based authentication** using express-session with PostgreSQL store (connect-pg-simple)
+  - Persistent sessions survive server restarts
+  - Auto-login after user registration
+  - Auth endpoints: GET /api/auth/me, POST /api/auth/login, POST /api/auth/logout
+  - Frontend useAuth hook for current user state management
+  - HttpOnly cookies with secure flag in production
+  - SameSite: lax for CSRF protection
 - **HTTP 402 payment protocol** for message sending with x402 PaymentRequirements structure
 - **Celo wallet connection** via wagmi with injected provider (MetaMask, etc.)
 - **EIP-712 signature generation** for USDC transfer authorization
-- Session-based authentication infrastructure using connect-pg-simple
 
 **Planned:**
 - **Self Protocol verification** for humanity proofing (currently placeholder/demo mode)
