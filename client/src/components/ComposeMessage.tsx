@@ -15,6 +15,7 @@ import { signTransferAuthorization, parseSignature } from "@/lib/eip-3009";
 interface ComposeMessageProps {
   isVerified: boolean;
   onSend?: (recipient: string, message: string, replyBounty: number) => void;
+  initialRecipient?: string | null;
 }
 
 interface PriceGuide {
@@ -25,8 +26,8 @@ interface PriceGuide {
   sampleSize: number;
 }
 
-export default function ComposeMessage({ isVerified, onSend }: ComposeMessageProps) {
-  const [recipient, setRecipient] = useState("");
+export default function ComposeMessage({ isVerified, onSend, initialRecipient }: ComposeMessageProps) {
+  const [recipient, setRecipient] = useState(initialRecipient || "");
   const [message, setMessage] = useState("");
   const [bidAmount, setBidAmount] = useState(0.10);
   const [replyBounty, setReplyBounty] = useState(0);
