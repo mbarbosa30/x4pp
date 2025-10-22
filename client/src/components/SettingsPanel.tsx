@@ -99,14 +99,14 @@ export default function SettingsPanel() {
   }
 
   return (
-    <Card className="p-6">
+    <Card className="p-4 sm:p-6">
       <div className="space-y-8">
         <div>
-          <h3 className="text-lg font-semibold mb-4">Open Bidding Configuration</h3>
+          <h3 className="text-base sm:text-lg font-semibold mb-4">Open Bidding Configuration</h3>
           <div className="space-y-6">
             <div>
-              <Label htmlFor="min-base-price">Minimum Bid (USDC)</Label>
-              <div className="flex items-center gap-3 mt-2">
+              <Label htmlFor="min-base-price" className="text-sm">Minimum Bid (USDC)</Label>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mt-2">
                 <Input
                   id="min-base-price"
                   type="number"
@@ -118,15 +118,15 @@ export default function SettingsPanel() {
                   className="max-w-32"
                   data-testid="input-min-base-price"
                 />
-                <span className="text-sm text-muted-foreground">
+                <span className="text-xs sm:text-sm text-muted-foreground">
                   Lowest bid you'll accept (senders can bid higher)
                 </span>
               </div>
             </div>
 
             <div>
-              <Label htmlFor="sla-hours">Response SLA (hours)</Label>
-              <div className="flex items-center gap-3 mt-2">
+              <Label htmlFor="sla-hours" className="text-sm">Response SLA (hours)</Label>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mt-2">
                 <Input
                   id="sla-hours"
                   type="number"
@@ -137,7 +137,7 @@ export default function SettingsPanel() {
                   className="max-w-32"
                   data-testid="input-sla-hours"
                 />
-                <span className="text-sm text-muted-foreground">
+                <span className="text-xs sm:text-sm text-muted-foreground">
                   Bids expire after this time if not accepted
                 </span>
               </div>

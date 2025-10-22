@@ -172,7 +172,7 @@ export default function PublicMessage() {
 
               <Button 
                 onClick={handleSend} 
-                className="w-full" 
+                className="w-full"
                 size="lg"
                 data-testid="button-send-message"
               >

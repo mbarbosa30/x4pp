@@ -301,7 +301,7 @@ export default function ComposeMessage({ isVerified, onSend }: ComposeMessagePro
   };
 
   return (
-    <Card className="p-6">
+    <Card className="p-4 sm:p-6">
       <div className="space-y-6">
         <div>
           <Label htmlFor="recipient">Recipient Username</Label>
@@ -384,7 +384,7 @@ export default function ComposeMessage({ isVerified, onSend }: ComposeMessagePro
                 {/* Bid Input with Quick Buttons */}
                 <div>
                   <Label htmlFor="bid-amount">Your Bid (USDC)</Label>
-                  <div className="flex items-center gap-2 mt-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 mt-2">
                     <Input
                       id="bid-amount"
                       type="number"
@@ -395,12 +395,13 @@ export default function ComposeMessage({ isVerified, onSend }: ComposeMessagePro
                       className="max-w-32 font-mono"
                       data-testid="input-bid-amount"
                     />
-                    <div className="flex gap-1">
+                    <div className="flex gap-1 flex-wrap">
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={() => setBidAmount(priceGuide.minBasePrice)}
                         data-testid="button-bid-min"
+                        className="text-xs"
                       >
                         Min
                       </Button>
@@ -410,6 +411,7 @@ export default function ComposeMessage({ isVerified, onSend }: ComposeMessagePro
                           size="sm"
                           onClick={() => setBidAmount(priceGuide.median!)}
                           data-testid="button-bid-median"
+                          className="text-xs"
                         >
                           Typical
                         </Button>
@@ -420,6 +422,7 @@ export default function ComposeMessage({ isVerified, onSend }: ComposeMessagePro
                           size="sm"
                           onClick={() => setBidAmount(priceGuide.p75!)}
                           data-testid="button-bid-high"
+                          className="text-xs"
                         >
                           High
                         </Button>
@@ -492,7 +495,7 @@ export default function ComposeMessage({ isVerified, onSend }: ComposeMessagePro
                 </div>
               </div>
               
-              <div className="flex gap-2">
+              <div className="flex flex-col sm:flex-row gap-2">
                 <Button
                   variant="outline"
                   onClick={() => {
@@ -501,6 +504,7 @@ export default function ComposeMessage({ isVerified, onSend }: ComposeMessagePro
                   }}
                   disabled={isPaying}
                   data-testid="button-cancel-payment"
+                  className="sm:w-auto"
                 >
                   Cancel
                 </Button>
@@ -511,11 +515,12 @@ export default function ComposeMessage({ isVerified, onSend }: ComposeMessagePro
                   data-testid="button-pay"
                 >
                   {isPaying ? (
-                    <>Processing Payment...</>
+                    <>Processing...</>
                   ) : (
                     <>
                       <Wallet className="h-4 w-4 mr-2" />
-                      Sign & Send
+                      <span className="hidden sm:inline">Sign & Send</span>
+                      <span className="sm:hidden">Sign</span>
                     </>
                   )}
                 </Button>

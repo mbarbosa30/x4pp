@@ -115,10 +115,10 @@ export default function InboxPending() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
+    <div className="max-w-4xl mx-auto p-4 sm:p-6">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold mb-2">Pending Message Bids</h1>
-        <p className="text-muted-foreground">
+        <h1 className="text-2xl sm:text-3xl font-bold mb-2">Pending Message Bids</h1>
+        <p className="text-sm sm:text-base text-muted-foreground">
           Review and accept/decline incoming message bids
         </p>
       </div>
@@ -133,13 +133,13 @@ export default function InboxPending() {
         </Card>
       ) : (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <Badge variant="outline" className="gap-1">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <Badge variant="outline" className="gap-1 w-fit">
               <Mail className="h-3 w-3" />
               {messages.length} pending bid{messages.length !== 1 ? 's' : ''}
             </Badge>
             <span className="text-xs text-muted-foreground">
-              Sorted by bid amount (highest first)
+              Sorted by bid (highest first)
             </span>
           </div>
 
@@ -148,22 +148,22 @@ export default function InboxPending() {
             const isProcessing = acceptMutation.isPending || declineMutation.isPending;
 
             return (
-              <Card key={message.id} className="p-6" data-testid={`card-message-${message.id}`}>
+              <Card key={message.id} className="p-4 sm:p-6" data-testid={`card-message-${message.id}`}>
                 <div className="space-y-4">
                   {/* Header with bid amount and sender */}
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <h3 className="font-semibold text-lg" data-testid={`text-sender-${message.id}`}>
+                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 mb-2">
+                        <h3 className="font-semibold text-base sm:text-lg truncate" data-testid={`text-sender-${message.id}`}>
                           {message.senderName}
                         </h3>
                         {message.senderEmail && (
-                          <span className="text-sm text-muted-foreground">
+                          <span className="text-xs sm:text-sm text-muted-foreground truncate">
                             {message.senderEmail}
                           </span>
                         )}
                       </div>
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <div className="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground flex-wrap">
                         <Clock className="h-3 w-3" />
                         <span>Sent {new Date(message.sentAt).toLocaleDateString()}</span>
                         <span>•</span>
@@ -173,10 +173,10 @@ export default function InboxPending() {
                       </div>
                     </div>
                     
-                    <div className="text-right">
+                    <div className="text-left sm:text-right flex-shrink-0">
                       <div className="flex items-center gap-1 mb-1">
-                        <DollarSign className="h-5 w-5 text-primary" />
-                        <span className="text-2xl font-bold tabular-nums" data-testid={`text-bid-${message.id}`}>
+                        <DollarSign className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+                        <span className="text-xl sm:text-2xl font-bold tabular-nums" data-testid={`text-bid-${message.id}`}>
                           {parseFloat(message.bidUsd).toFixed(2)}
                         </span>
                       </div>
@@ -197,10 +197,11 @@ export default function InboxPending() {
                   </div>
 
                   {/* Actions */}
-                  <div className="border-t pt-4 flex gap-2">
+                  <div className="border-t pt-4 flex flex-col sm:flex-row gap-2">
                     <Button
                       variant="outline"
                       className="flex-1 gap-2"
+                      size="sm"
                       onClick={() => declineMutation.mutate(message.id)}
                       disabled={isProcessing || isExpired}
                       data-testid={`button-decline-${message.id}`}
@@ -210,12 +211,14 @@ export default function InboxPending() {
                     </Button>
                     <Button
                       className="flex-1 gap-2"
+                      size="sm"
                       onClick={() => acceptMutation.mutate(message.id)}
                       disabled={isProcessing || isExpired}
                       data-testid={`button-accept-${message.id}`}
                     >
                       <CheckCircle className="h-4 w-4" />
-                      Accept ${parseFloat(message.bidUsd).toFixed(2)}
+                      <span className="hidden sm:inline">Accept ${parseFloat(message.bidUsd).toFixed(2)}</span>
+                      <span className="sm:hidden">Accept</span>
                     </Button>
                   </div>
 

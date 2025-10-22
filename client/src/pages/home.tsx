@@ -81,18 +81,19 @@ export default function Home() {
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="sticky top-0 z-50 border-b backdrop-blur-lg bg-background/95">
-        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Mail className="h-6 w-6 text-primary" />
-            <div>
-              <h1 className="text-xl font-semibold">x4pp</h1>
-              <p className="text-xs text-muted-foreground">@{user.username}</p>
+        <div className="container mx-auto px-4 h-14 sm:h-16 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+            <Mail className="h-5 w-5 sm:h-6 sm:w-6 text-primary flex-shrink-0" />
+            <div className="min-w-0">
+              <h1 className="text-base sm:text-xl font-semibold">x4pp</h1>
+              <p className="text-xs text-muted-foreground truncate">@{user.username}</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
             <Link href="/profile">
-              <Button variant="ghost" data-testid="button-profile">
-                Profile
+              <Button variant="ghost" size="sm" data-testid="button-profile" className="text-xs sm:text-sm">
+                <span className="hidden sm:inline">Profile</span>
+                <span className="sm:hidden">P</span>
               </Button>
             </Link>
             <Button
@@ -101,8 +102,9 @@ export default function Home() {
               onClick={handleLogout}
               disabled={logoutMutation.isPending}
               data-testid="button-logout"
+              className="h-8 w-8 sm:h-10 sm:w-10"
             >
-              <LogOut className="h-5 w-5" />
+              <LogOut className="h-4 w-4 sm:h-5 sm:w-5" />
             </Button>
           </div>
         </div>
@@ -132,10 +134,10 @@ export default function Home() {
             </TabsContent>
 
             <TabsContent value="compose" className="mt-0">
-              <div className="max-w-4xl mx-auto p-6">
+              <div className="max-w-4xl mx-auto p-4 sm:p-6">
                 <div className="mb-6">
-                  <h1 className="text-3xl font-bold mb-2">Send Message</h1>
-                  <p className="text-muted-foreground">
+                  <h1 className="text-2xl sm:text-3xl font-bold mb-2">Send Message</h1>
+                  <p className="text-sm sm:text-base text-muted-foreground">
                     Compose and send a message to someone's attention market
                   </p>
                 </div>
@@ -144,10 +146,10 @@ export default function Home() {
             </TabsContent>
 
             <TabsContent value="settings" className="mt-0">
-              <div className="max-w-4xl mx-auto p-6">
+              <div className="max-w-4xl mx-auto p-4 sm:p-6">
                 <div className="mb-6">
-                  <h1 className="text-3xl font-bold mb-2">Settings</h1>
-                  <p className="text-muted-foreground">
+                  <h1 className="text-2xl sm:text-3xl font-bold mb-2">Settings</h1>
+                  <p className="text-sm sm:text-base text-muted-foreground">
                     Configure your attention market pricing and preferences
                   </p>
                 </div>
