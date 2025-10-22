@@ -152,7 +152,7 @@ async function verifyPayment(
     }
 
     // Verify expiration (use validBefore if expiration not present)
-    const expirationTimestamp = proof.expiration || proof.validBefore;
+    const expirationTimestamp = proof.expiration || proof.validBefore || Math.floor(Date.now() / 1000) + 3600;
     // Convert to seconds if in milliseconds
     const expirationSeconds = expirationTimestamp > 10000000000 
       ? Math.floor(expirationTimestamp / 1000) 

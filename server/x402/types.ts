@@ -31,7 +31,13 @@ export interface PaymentProof {
   recipient: string;
   nonce: string;
   expiration: number;
-  signature: string; // EIP-712 signature
+  validAfter?: number; // EIP-3009: Valid after timestamp
+  validBefore?: number; // EIP-3009: Valid before timestamp
+  signature: string | { // EIP-712 signature - supports both formats
+    v: number;
+    r: string;
+    s: string;
+  };
 }
 
 export interface PaymentResponse {
