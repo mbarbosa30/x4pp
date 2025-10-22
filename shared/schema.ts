@@ -119,8 +119,6 @@ export const insertMessageSchema = createInsertSchema(messages).omit({
   openedAt: true,
   repliedAt: true,
   refundedAt: true,
-}).extend({
-  expiresAt: z.string().datetime().optional(),
 });
 
 export const insertReputationEventSchema = createInsertSchema(reputationEvents).omit({

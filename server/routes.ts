@@ -6,6 +6,8 @@ import { eq, and, desc } from "drizzle-orm";
 import { computeReputationScore, updateReputationScore, logReputationEvent } from "./reputation";
 import x402Routes from "./x402/routes";
 import selfRoutes from "./self/routes";
+import quoteRoutes from "./api/quote";
+import commitRoutes from "./api/commit";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Mount x402 payment routes
@@ -13,6 +15,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Mount Self Protocol verification routes
   app.use("/api/self", selfRoutes);
+  
+  // Mount quote and commit routes
+  app.use("/api/quote", quoteRoutes);
+  app.use("/api/commit", commitRoutes);
   // Get user by username
   app.get("/api/users/:username", async (req, res) => {
     try {
