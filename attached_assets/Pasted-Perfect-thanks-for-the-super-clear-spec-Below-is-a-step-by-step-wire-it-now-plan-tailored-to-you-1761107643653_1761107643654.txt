@@ -1,0 +1,254 @@
+Perfect — thanks for the super-clear spec. Below is a step-by-step, wire-it-now plan tailored to your current stack and the open-bidding model you described for x4pp. It’s written so you can hand it to a dev and start implementing immediately.
+
+⸻
+
+1) Harden the data model (Drizzle / Postgres)
+
+Tables & key constraints
+	•	users
+	•	id pk, username unique, wallet_address unique not null
+	•	min_base_price_usd numeric(12,6) not null default 0.050000
+	•	sla_hours int not null default 24
+	•	indexes: idx_users_username, idx_users_wallet
+	•	messages
+	•	id pk, sender_user_id fk, recipient_user_id fk
+	•	content_cipher text not null (or plain text if you keep it simple for MVP)
+	•	bid_usd numeric(12,6) not null, reply_bounty_usd numeric(12,6) null
+	•	status enum('pending','accepted','declined','expired','withdrawn') not null
+	•	created_at timestamptz default now()
+	•	expires_at timestamptz not null
+	•	accepted_at, declined_at timestamptz null
+	•	rule: one active pending per (sender, recipient) → unique partial index
+create unique index uniq_pending_pair on messages(sender_user_id, recipient_user_id) where status='pending';
+	•	payments
+	•	id pk, message_id fk unique
+	•	amount_usdc bigint not null (USDC 6 decimals; store in “microunits”)
+	•	from_address, to_address
+	•	full EIP-3009 auth capture: valid_after bigint, valid_before bigint, nonce bytes32, v smallint, r bytes32, s bytes32
+	•	status enum('authorized','settled','unused','refund_failed') not null
+	•	tx_hash_auth null, tx_hash_settle null
+	•	index: idx_payments_nonce (defense-in-depth against replay in your DB)
+	•	blocks
+	•	id pk, recipient_user_id fk, blocked_sender_user_id fk, created_at
+	•	unique (recipient_user_id, blocked_sender_user_id)
+
+(If you already have tables, just ensure the constraints and indexes above.)
+
+⸻
+
+2) Auth & wallet binding
+	•	When a user registers/updates wallet_address, store it and enforce at send time that:
+	•	the EIP-3009 from in the authorization equals sender.wallet_address.
+	•	the to equals recipient.wallet_address from DB (prevent “wrong recipient” tricks).
+	•	Keep session auth (HttpOnly cookie + session table). Add a simple /me to return {id, username, wallet_address, min_base_price_usd, sla_hours}.
+
+⸻
+
+3) Price Guide API
+
+GET /api/price-guide/:username
+	•	Load recipient and min_base_price_usd.
+	•	Pull current pending bids to this recipient: select bid_usd from messages where recipient_user_id=$id and status='pending' order by bid_usd.
+	•	Winsorize: clamp to [min_base, p95] to remove outliers.
+	•	Compute p25 / median / p75; if pending_count < 5, blend 50% with last-7d accepted bids.
+	•	Return:
+
+{
+  "minBaseUSD":"0.05",
+  "p25":"0.08",
+  "median":"0.11",
+  "p75":"0.18",
+  "sampleSize": 23
+}
+
+Frontend: show Min / Typical / High quick buttons mapped to minBase, median, p75.
+
+⸻
+
+4) Commit (open bid) + EIP-3009 handshake
+
+POST /api/commit
+Body:
+
+{ "recipientUsername":"alice", "content":"Hello!", "bidUsd":"0.50", "replyBountyUsd":null }
+
+4.1 Validate & 402 round-trip
+	•	Ensure sender logged in and not blocked by recipient.
+	•	Ensure no other pending sender→recipient (unique partial index helps).
+	•	Validate bidUsd >= min_base_price_usd.
+	•	If no X-PAYMENT header → respond HTTP 402 with payment requirements:
+
+{
+  "token":"USDC",
+  "chainId":42220,
+  "verifyingContract":"<USDC_ADDRESS>",
+  "to": "<recipient.wallet_address>",
+  "amountMicros": 500000,     // 0.50 USDC -> 500000
+  "validAfter": <unixSecondsNow>,
+  "validBefore": <now + sla_hours * 3600>,
+  "nonce": "<serverGeneratedBytes32>",
+  "typedDataDomain": { "name":"USD Coin", "version":"2", "chainId":42220, "verifyingContract":"<USDC_ADDRESS>" },
+  "typedDataTypes": { "TransferWithAuthorization":[
+    {"name":"from","type":"address"},
+    {"name":"to","type":"address"},
+    {"name":"value","type":"uint256"},
+    {"name":"validAfter","type":"uint256"},
+    {"name":"validBefore","type":"uint256"},
+    {"name":"nonce","type":"bytes32"}
+  ]}
+}
+
+(Client signs this typed data; nothing moves on-chain yet.)
+
+4.2 With X-PAYMENT header (second call)
+
+Header:
+
+X-PAYMENT: {
+  "from":"0xSender",
+  "to":"0xRecipient",
+  "value":"500000",
+  "validAfter":"<x>",
+  "validBefore":"<y>",
+  "nonce":"0x...",
+  "v":27,"r":"0x...","s":"0x..."
+}
+
+Server:
+	•	Verify signature against domain/types/values and sender session wallet.
+	•	Create messages row: status='pending', expires_at = validBefore (or now + sla_hours if you prefer).
+	•	Create payments row with exact parameters + status='authorized'.
+	•	Return { messageId, status:"pending", expiresAt }.
+
+🔐 Do not store only the signature string; store all parameters you will replay on accept (prevents subtle replay/“mismatch” bugs).
+
+⸻
+
+5) Inbox (receiver)
+
+GET /api/inbox
+	•	Requires receiver session; return pending items (sorted by bid_usd desc, created_at asc).
+	•	Include: messageId, preview, bidUsd, sender.username, senderFacts, expiresAt.
+
+⸻
+
+6) Accept / Decline (settlement)
+
+POST /api/messages/:id/accept
+	•	Load message (pending) + payments (authorized).
+	•	Row-lock the message: select ... for update to prevent double-accept race.
+	•	Call USDC: transferWithAuthorization(from, to, value, validAfter, validBefore, nonce, v, r, s) via viem using your relayer key.
+	•	On success:
+	•	set payments.status='settled', tx_hash_settle = <hash>, messages.status='accepted', accepted_at=now().
+	•	Handle token revert causes (e.g., expired, wrong nonce) → mark payments.status='unused', messages.status='expired' or declined' accordingly and surface an error toast.
+
+POST /api/messages/:id/decline
+	•	Row-lock; set messages.status='declined', payments.status='unused', declined_at=now().
+	•	No on-chain call; funds never moved.
+
+⸻
+
+7) Auto-expiry worker
+
+Cron every 5 minutes:
+
+update messages
+  set status='expired'
+where status='pending' and expires_at < now()
+returning id;
+
+for each message:
+  update payments set status='unused' where message_id = id and status='authorized';
+
+Log both sides. (No chain tx required—auth just becomes invalid after validBefore.)
+
+⸻
+
+8) Security hardening (MVP-critical)
+	•	Recipient binding: ensure to == recipient.wallet_address from DB (no payload-swaps).
+	•	Replay protection:
+	•	Store (nonce, from) in DB; unique index.
+	•	USDC contract already tracks used nonces—your DB check is an extra guard.
+	•	Authorization window: keep validBefore tight (SLA hours). Reject if user tries to reuse old auth.
+	•	Bigint math: convert USD → USDC microunits once, server-side, with safe integer math.
+	•	Blocklist check at composer and commit endpoints.
+	•	Rate-limit commit by IP/user to avoid DoS via large pending queues.
+
+⸻
+
+9) Observability
+	•	Structured logs: one line per lifecycle step: price_guide_served, payment_authorized, message_pending, message_accepted, message_declined, message_expired, including recipient, bid_usd, latency_ms, wallets, tx_hash.
+	•	Metrics dashboards (use any APM):
+	•	Pending count per recipient
+	•	Acceptance rate 7d
+	•	Median accepted bid 7d
+	•	Time-to-decision (P50/P90)
+	•	Error rates by endpoint
+
+⸻
+
+10) Reputation “facts” (lightweight)
+
+Nightly job over last 60–90 days (with exponential decay):
+	•	Receivers: acceptance rate, median accepted bid, P90 open time.
+	•	Senders: open rate (if you gate full text after accept), decline rate.
+Return simple strings to UI (chips on cards), e.g. “Accepts 62% • Median $0.11”.
+
+(Wilson lower bound for rates to avoid small-n lies.)
+
+⸻
+
+11) Manual end-to-end test script
+
+Setup
+	•	Two users (two wallets).
+	•	Receiver sets min_base_price = $0.05, SLA=24h.
+
+Happy path
+	1.	Sender connects wallet → compose “hi” → price guide appears.
+	2.	Choose bid $0.12 → POST /api/commit → 402 received.
+	3.	Wallet signs typed data (EIP-3009) → client retries with X-PAYMENT.
+	4.	API returns {pending, expiresAt}; /inbox shows item at top.
+	5.	Receiver clicks Accept → on-chain tx mined → UI shows “Accepted”, balance increments.
+	6.	Verify DB: payments.settled, messages.accepted.
+
+Decline
+	•	Same until step 4; receiver clicks Decline → payments.unused, messages.declined. Verify no chain tx.
+
+Expiry
+	•	Create a pending with short SLA (e.g., 2 minutes). Wait → worker marks expired & payments.unused.
+
+Guards
+	•	Try to accept twice → second attempt blocked by row-lock and token’s authorization state.
+	•	Change to or value in replay → server rejects (mismatch).
+	•	Bid below min → server 400.
+	•	Blocked sender → cannot see price guide / cannot commit.
+
+⸻
+
+12) Frontend wiring notes (React + Wagmi)
+	•	Price guide: fetch on username change; show quick buttons: Min / Typical (median) / High (p75).
+	•	Commit: first call expects 402; the body gives typed-data domain/types. Use walletClient.signTypedData (wagmi/viem) to sign with the sender account.
+	•	Retry: include X-PAYMENT header with all fields (from,to,value,validAfter,validBefore,nonce,v,r,s).
+	•	Inbox: poll or use TanStack Query invalidate on accept/decline.
+
+⸻
+
+13) “Nice to have” (quick wins that won’t complicate MVP)
+	•	Withdraw own bid (if still pending & unviewed): mark withdrawn; set payment unused.
+	•	Cooldown after decline: require +X% higher next bid within 24h.
+	•	Auto-accept threshold (off by default): receiver can set “auto-accept ≥ $T”.
+	•	Reply bounty (phase 2): same EIP-3009 pattern, but escrow separately and settle only on “reply” event.
+
+⸻
+
+14) Launch checklist
+	•	✅ Env vars for USDC address, chainId 42220, Forno RPC, relayer private key (accept endpoint).
+	•	✅ CORS + HTTPS everywhere.
+	•	✅ DB migrations applied; unique indexes in place.
+	•	✅ Admin “kill-switch” to disable new commits if RPC degrades.
+	•	✅ Clear copy in UI: “No gas to send. If not accepted in {{SLA}}h, authorization expires and no funds move.”
+
+⸻
+
+This plan matches your open-bidding, EIP-3009 authorization model exactly: no locked capital, no platform escrow, fully peer-to-peer. If you want, I can also draft the exact Drizzle schemas and a TypeScript helper to build/verify the EIP-3009 typed data so your 402 round-trip is copy-paste ready.
