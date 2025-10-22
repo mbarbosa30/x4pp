@@ -177,16 +177,16 @@ export default function Landing() {
                 </div>
                 <div className="space-y-3 pt-4">
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Minimum base price</span>
+                    <span className="text-muted-foreground">Minimum price</span>
                     <span className="font-semibold">$0.05 USDC</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Response SLA</span>
+                    <span className="text-muted-foreground">Response time</span>
                     <span className="font-semibold">24 hours</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Payment method</span>
-                    <span className="font-semibold">USDC on Celo</span>
+                    <span className="text-muted-foreground">Messages accepted</span>
+                    <span className="font-semibold">42 this month</span>
                   </div>
                 </div>
               </div>
@@ -202,7 +202,7 @@ export default function Landing() {
             Ready to get started?
           </h2>
           <p className="text-lg text-muted-foreground">
-            Register to accept bids for your attention or place a bid on someone's inbox
+            Start monetizing your inbox or send a message that actually gets read
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
             <Link href="/register">
