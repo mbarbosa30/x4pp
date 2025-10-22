@@ -52,16 +52,15 @@ x4pp is a peer-to-peer messaging application with an innovative "attention marke
 - Added wagmi/viem integration for Web3 wallet interactions
 
 **Next Steps:**
-- Update frontend: registration form and settings panel (remove surge pricing fields)
-- Create ComposeMessage UI: fetch price guide, show reference range, bid input with quick buttons
-- Create InboxPending page: show pending messages with accept/decline actions
-- Manual E2E testing: registration → settings → compose → accept/decline → verify payment settlement
-- Add automated integration tests for open bidding flow
+- Manual E2E testing with real Celo wallet: sender bid → receiver accept/decline → verify on-chain settlement
+- Add automated regression tests for /api/price-guide and /api/messages accept/decline endpoints
+- Monitor refund worker logs in production to ensure expired pending messages are handled correctly
 
 Key features include:
-- **Proof-of-humanity gating**: Verified humans pay discounted rates; unverified users can still send but at higher prices
-- **Dynamic surge pricing**: Message costs adjust based on inbox demand and recipient availability
-- **Attention slots**: Limited message capacity per time window with automatic refunds for unopened messages
+- **Open bidding model**: Senders place bids based on reference pricing (P25/median/P75 from pending bids)
+- **Receiver-driven acceptance**: Recipients manually accept or decline each message bid
+- **EIP-3009 escrow**: Funds stay in sender's wallet until receiver accepts (true escrow via authorization)
+- **Automatic expiry**: Bids expire after SLA hours if not accepted, authorization marked unused
 - **Reputation system**: Privacy-preserving scoring based on message engagement and user behavior
 - **Reply bounties**: Optional rewards for timely responses
 
