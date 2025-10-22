@@ -92,10 +92,13 @@ export default function Register() {
         description: `Welcome @${data.user.username}!`,
       });
       
-      // Invalidate auth cache to pick up the new session
-      await queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+      // Refetch auth data and wait for it to complete
+      await queryClient.refetchQueries({ queryKey: ["/api/auth/me"] });
       
-      // Use React Router navigation instead of full reload
+      // Small delay to ensure session is fully established
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Navigate to dashboard
       setLocation("/app");
     },
     onError: (error: any) => {
