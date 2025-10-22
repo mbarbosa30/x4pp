@@ -1,9 +1,7 @@
-import { useState } from "react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import { 
   Mail, 
   Shield, 
@@ -19,7 +17,6 @@ import { SiGithub } from "react-icons/si";
 import ThemeToggle from "@/components/ThemeToggle";
 
 export default function Landing() {
-  const [username, setUsername] = useState("");
 
   return (
     <div className="min-h-screen bg-background">
@@ -57,15 +54,21 @@ export default function Landing() {
           
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-6">
             <Link href="/register">
-              <Button size="lg" data-testid="button-get-started">
-                Create Account
+              <Button size="lg" data-testid="button-register">
+                Register to Receive
                 <ArrowRight className="h-4 w-4 ml-2" />
+              </Button>
+            </Link>
+            <Link href="/app">
+              <Button size="lg" variant="outline" data-testid="button-send-message">
+                <Mail className="h-4 w-4 mr-2" />
+                Send a Message
               </Button>
             </Link>
           </div>
 
           <p className="text-sm text-muted-foreground">
-            Free to start • No credit card required
+            Register to receive paid messages • Or send a message to someone directly
           </p>
         </div>
       </section>
@@ -171,7 +174,7 @@ export default function Landing() {
                   <Badge variant="outline">Premium</Badge>
                 </div>
                 <div className="font-mono text-sm text-primary bg-background p-3 rounded border">
-                  x4pp.app/@{username || "yourname"}
+                  x4pp.app/@yourname
                 </div>
                 <div className="space-y-3 pt-4">
                   <div className="flex justify-between text-sm">
@@ -197,17 +200,25 @@ export default function Landing() {
       <section className="container mx-auto px-4 py-16 md:py-24 bg-primary/5">
         <div className="max-w-3xl mx-auto text-center space-y-6">
           <h2 className="text-3xl md:text-4xl font-bold">
-            Ready to reclaim your attention?
+            Ready to get started?
           </h2>
           <p className="text-lg text-muted-foreground">
-            Join thousands protecting their inbox with paid messaging
+            Register to monetize your attention or send a paid message to someone
           </p>
-          <Link href="/app">
-            <Button size="lg" className="mt-4" data-testid="button-cta">
-              <Wallet className="h-4 w-4 mr-2" />
-              Connect Wallet & Start
-            </Button>
-          </Link>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
+            <Link href="/register">
+              <Button size="lg" data-testid="button-cta-register">
+                <Wallet className="h-4 w-4 mr-2" />
+                Register Account
+              </Button>
+            </Link>
+            <Link href="/app">
+              <Button size="lg" variant="outline" data-testid="button-cta-send">
+                <Mail className="h-4 w-4 mr-2" />
+                Send a Message
+              </Button>
+            </Link>
+          </div>
         </div>
       </section>
 
