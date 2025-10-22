@@ -42,20 +42,19 @@ export default function Landing() {
       <section className="container mx-auto px-4 py-16 md:py-24">
         <div className="max-w-4xl mx-auto text-center space-y-6">
           <Badge variant="outline" className="mb-4">
-            True P2P • No Platform Fees
+            No Spam • Just Messages That Matter
           </Badge>
           <h1 className="text-4xl md:text-6xl font-bold tracking-tight">
-            Get paid for your attention
+            Get paid to read messages
           </h1>
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-            A peer-to-peer messaging app where senders bid for your time. 
-            Set your minimum price, accept the bids you want, and receive USDC directly.
+            A messaging app where your time has value. Set your price, and only read messages you choose to accept.
           </p>
           
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-6">
             <Link href="/register">
               <Button size="lg" data-testid="button-register">
-                Register to Receive
+                Start Getting Paid
                 <ArrowRight className="h-4 w-4 ml-2" />
               </Button>
             </Link>
@@ -68,7 +67,7 @@ export default function Landing() {
           </div>
 
           <p className="text-sm text-muted-foreground">
-            Register to accept bids • Or send a bid to someone directly
+            Register to monetize your inbox • Or reach someone directly
           </p>
         </div>
       </section>
