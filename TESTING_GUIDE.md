@@ -21,6 +21,16 @@
    - `PAYMENT_WALLET_PRIVATE_KEY` - Backend relayer wallet for settlements
    - `PAYMENT_WALLET_ADDRESS` - Corresponding address
    - `SESSION_SECRET` - For session management
+   - `VITE_REOWN_PROJECT_ID` - Reown (WalletConnect) project ID
+
+4. **Reown Dashboard Configuration:**
+   - Visit [https://cloud.reown.com/](https://cloud.reown.com/)
+   - Sign in with your Reown account
+   - Select your project (ID: `6cfdd5241f7825f285e6ad67c9e716aa`)
+   - Navigate to "Settings" → "Allowed Domains"
+   - Add your Replit development URL (e.g., `https://[workspace-id].replit.dev`)
+   - Add `localhost` for local testing if needed
+   - **Note:** Without adding your domain, you'll see: "The origin [...] is not in your allow list"
 
 ### Getting Test USDC on Celo:
 - **Option 1:** Bridge from another chain using [Portal Bridge](https://portalbridge.com/)

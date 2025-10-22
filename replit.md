@@ -5,6 +5,13 @@
 x4pp is a peer-to-peer messaging application with an innovative "attention market" model where sending messages requires humanity verification and dynamic pricing. The app enables users to monetize their attention by setting prices for incoming messages, with built-in protections against spam through verification gates and surge pricing mechanisms.
 
 **Recent Updates (Oct 22, 2025):**
+- **Reown AppKit (WalletConnect) Integration Complete ✅**: Professional wallet connection UI
+  - Frontend: Reown AppKit modal with support for multiple wallet providers
+  - Frontend: WalletConnect v2 protocol for mobile wallet connections
+  - Frontend: Auto-login/logout on wallet connect/disconnect/account switch
+  - Configuration: Theme customization with brand colors (dark mode, purple accent)
+  - Security: Fixed auto-login to trigger on account switches (prevents stale sessions)
+  - Setup: Requires adding Replit dev URL to Reown dashboard allowed domains
 - **CRITICAL PAYMENT FIXES COMPLETED ✅**: Fixed escrow-settle-refund flow for open bidding model
   - Backend: settlePayment now replays ORIGINAL EIP-3009 authorization with validAfter/validBefore from commit
   - Backend: refundPayment simplified - no on-chain transfer needed (authorization simply not executed)
@@ -176,8 +183,14 @@ Preferred communication style: Simple, everyday language.
   - Frontend useAuth hook for current user state management
   - HttpOnly cookies with secure flag in production
   - SameSite: lax for CSRF protection
+- **Reown AppKit wallet connection** via WalletConnect v2
+  - Modal UI with support for MetaMask, WalletConnect, Coinbase Wallet, and more
+  - Auto-login on wallet connect and account switch
+  - Auto-logout on wallet disconnect
+  - Configuration: client/src/lib/reown-config.ts
+  - Environment: VITE_REOWN_PROJECT_ID required
 - **HTTP 402 payment protocol** for message sending with x402 PaymentRequirements structure
-- **Celo wallet connection** via wagmi with injected provider (MetaMask, etc.)
+- **Celo blockchain integration** via wagmi with Celo mainnet configuration
 - **EIP-712 signature generation** for USDC transfer authorization
 
 **Planned:**
