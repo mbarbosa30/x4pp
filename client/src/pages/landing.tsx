@@ -42,7 +42,7 @@ export default function Landing() {
       <section className="container mx-auto px-4 py-16 md:py-24">
         <div className="max-w-4xl mx-auto text-center space-y-6">
           <Badge variant="outline" className="mb-4">
-            This inbox stays human
+            True P2P • No Platform Fees
           </Badge>
           <h1 className="text-4xl md:text-6xl font-bold tracking-tight">
             Get paid for your attention
@@ -68,7 +68,7 @@ export default function Landing() {
           </div>
 
           <p className="text-sm text-muted-foreground">
-            Register to receive paid messages • Or send a message to someone directly
+            Register to accept bids • Or send a bid to someone directly
           </p>
         </div>
       </section>
@@ -203,7 +203,7 @@ export default function Landing() {
             Ready to get started?
           </h2>
           <p className="text-lg text-muted-foreground">
-            Register to monetize your attention or send a paid message to someone
+            Register to accept bids for your attention or place a bid on someone's inbox
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
             <Link href="/register">
