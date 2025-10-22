@@ -74,7 +74,10 @@ router.post("/", async (req, res) => {
 
     if (!paymentHeader) {
       // No payment yet - return HTTP 402 with PaymentRequirements
-      const nonce = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      // Generate bytes32 nonce for EIP-3009 compatibility
+      const { createHash } = await import('crypto');
+      const nonceString = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const nonce = `0x${createHash('sha256').update(nonceString).digest('hex')}`;
       
       const paymentRequirements = {
         amount: amountUSD.toFixed(2),
@@ -122,7 +125,10 @@ router.post("/", async (req, res) => {
 
     if (!paymentValid) {
       // Return 402 with PaymentRequirements for retry (x402 protocol compliance)
-      const nonce = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      // Generate bytes32 nonce for EIP-3009 compatibility
+      const { createHash } = await import('crypto');
+      const nonceString = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const nonce = `0x${createHash('sha256').update(nonceString).digest('hex')}`;
       
       return res.status(402).json({ 
         error: "Payment verification failed",

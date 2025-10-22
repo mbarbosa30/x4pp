@@ -185,7 +185,7 @@ export default function ComposeMessage({ isVerified, onSend }: ComposeMessagePro
         value: amountInSmallestUnit,
         validAfter: BigInt(0), // Valid immediately
         validBefore: BigInt(paymentRequirements.expiration),
-        nonce: paymentRequirements.nonce as `0x${string}`,
+        nonce: paymentRequirements.nonce as `0x${string}`, // Backend now generates bytes32 nonces
       };
 
       toast({
@@ -194,7 +194,7 @@ export default function ComposeMessage({ isVerified, onSend }: ComposeMessagePro
       });
 
       // Sign the authorization
-      const signatureHex = await signTransferAuthorization(authParams, walletAddress);
+      const signatureHex = await signTransferAuthorization(authParams, walletAddress as `0x${string}`);
 
       // Parse signature into v, r, s components (required by backend)
       const parsedSig = parseSignature(signatureHex);
@@ -206,7 +206,7 @@ export default function ComposeMessage({ isVerified, onSend }: ComposeMessagePro
         amount: paymentRequirements.amount,
         sender: walletAddress,
         recipient: paymentRequirements.recipient,
-        nonce: paymentRequirements.nonce,
+        nonce: paymentRequirements.nonce, // Already in bytes32 format from backend
         expiration: paymentRequirements.expiration,
         signature: signatureHex, // Full signature for reference
         v: parsedSig.v,

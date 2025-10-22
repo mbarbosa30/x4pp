@@ -1,6 +1,8 @@
 // EIP-3009: Transfer With Authorization
 // Used for gasless USDC transfers on Celo
 
+import { keccak256, toHex } from 'viem';
+
 export interface TransferWithAuthorizationParams {
   from: string;
   to: string;
@@ -8,6 +10,15 @@ export interface TransferWithAuthorizationParams {
   validAfter: bigint;
   validBefore: bigint;
   nonce: string;
+}
+
+/**
+ * Convert a string nonce to bytes32 format required by EIP-3009
+ * Uses keccak256 hash to ensure proper 32-byte format
+ */
+export function nonceToBytes32(nonce: string): `0x${string}` {
+  // Hash the nonce string to get exactly 32 bytes
+  return keccak256(toHex(nonce));
 }
 
 export interface PaymentAuthSignature {
