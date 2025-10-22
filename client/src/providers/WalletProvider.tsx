@@ -49,7 +49,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         // Handle new wallet connection or account switch
         if (account.isConnected && account.address) {
           // If it's a new address or first connection, try auto-login
-          if (!previousAddress || account.address !== previousAddress) {
+          // But ONLY if we're on the landing page
+          if ((!previousAddress || account.address !== previousAddress) && window.location.pathname === '/') {
             try {
               const response = await fetch('/api/auth/login', {
                 method: 'POST',
