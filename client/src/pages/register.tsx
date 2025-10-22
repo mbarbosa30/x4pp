@@ -51,7 +51,7 @@ interface Token {
 export default function Register() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const { address: walletAddress, isConnected, connect } = useWallet();
+  const { address: walletAddress, isConnected, connect, disconnect } = useWallet();
   
   const { data: tokens = [], isLoading: tokensLoading } = useQuery<Token[]>({
     queryKey: ['/api/tokens'],
@@ -143,8 +143,14 @@ export default function Register() {
                     <div className="flex-1 font-mono text-sm bg-muted p-3 rounded border" data-testid="text-connected-wallet">
                       {walletAddress}
                     </div>
-                    <Button variant="outline" size="sm" disabled>
-                      Connected
+                    <Button 
+                      type="button"
+                      variant="outline" 
+                      size="sm" 
+                      onClick={disconnect}
+                      data-testid="button-disconnect-wallet"
+                    >
+                      Disconnect
                     </Button>
                   </div>
                 )}

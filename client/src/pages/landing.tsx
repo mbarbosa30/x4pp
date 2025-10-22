@@ -22,10 +22,9 @@ import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 
 export default function Landing() {
-  const { address: walletAddress, isConnected, connect } = useWallet();
+  const { address: walletAddress, isConnected, connect, disconnect } = useWallet();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const hasCheckedRef = useRef(false);
 
   const checkProfileMutation = useMutation({
     mutationFn: async (address: string) => {
@@ -50,26 +49,8 @@ export default function Landing() {
     },
   });
 
-  // Watch for wallet connection and check profile after a delay
-  useEffect(() => {
-    if (isConnected && walletAddress && !hasCheckedRef.current) {
-      // Wait for WalletProvider's auto-login to complete
-      // If it succeeds, page will reload. If not, we check manually
-      const timer = setTimeout(() => {
-        checkProfileMutation.mutate(walletAddress);
-        hasCheckedRef.current = true;
-      }, 1500);
-
-      return () => clearTimeout(timer);
-    }
-  }, [isConnected, walletAddress]);
-
   const handleConnect = async () => {
-    if (isConnected && walletAddress) {
-      // Already connected, check for profile immediately
-      checkProfileMutation.mutate(walletAddress);
-    } else {
-      // Connect wallet first - the useEffect will handle profile check
+    if (!isConnected) {
       try {
         await connect();
       } catch (error) {
@@ -79,6 +60,34 @@ export default function Landing() {
           variant: "destructive",
         });
       }
+    }
+  };
+
+  const handleContinue = () => {
+    if (isConnected && walletAddress) {
+      checkProfileMutation.mutate(walletAddress);
+    } else {
+      toast({
+        title: "Wallet not connected",
+        description: "Please connect your wallet first",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDisconnect = async () => {
+    try {
+      await disconnect();
+      toast({
+        title: "Wallet disconnected",
+        description: "Your wallet has been disconnected",
+      });
+    } catch (error) {
+      toast({
+        title: "Disconnect failed",
+        description: "Failed to disconnect wallet",
+        variant: "destructive",
+      });
     }
   };
 
@@ -93,15 +102,37 @@ export default function Landing() {
           </div>
           <div className="flex items-center gap-3">
             <ThemeToggle />
-            <Button 
-              variant="outline" 
-              data-testid="button-connect"
-              onClick={handleConnect}
-              disabled={checkProfileMutation.isPending}
-            >
-              <Wallet className="h-4 w-4 mr-2" />
-              {checkProfileMutation.isPending ? "Connecting..." : "Connect"}
-            </Button>
+            {isConnected ? (
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground hidden sm:inline">
+                  {walletAddress?.slice(0, 6)}...{walletAddress?.slice(-4)}
+                </span>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  data-testid="button-disconnect"
+                  onClick={handleDisconnect}
+                >
+                  Disconnect
+                </Button>
+                <Button 
+                  data-testid="button-continue"
+                  onClick={handleContinue}
+                  disabled={checkProfileMutation.isPending}
+                >
+                  {checkProfileMutation.isPending ? "Loading..." : "Continue"}
+                </Button>
+              </div>
+            ) : (
+              <Button 
+                variant="outline" 
+                data-testid="button-connect"
+                onClick={handleConnect}
+              >
+                <Wallet className="h-4 w-4 mr-2" />
+                Connect
+              </Button>
+            )}
           </div>
         </div>
       </header>

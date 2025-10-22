@@ -39,33 +39,23 @@ export function WalletProvider({ children }: { children: ReactNode }) {
               method: 'POST',
               credentials: 'include',
             });
-            console.log('Auto-logged out due to wallet disconnect');
-            window.location.reload();
+            console.log('Logged out due to wallet disconnect');
           } catch (logoutError) {
-            console.error('Failed to auto-logout:', logoutError);
+            console.error('Failed to logout:', logoutError);
           }
           return;
         }
 
-        // Handle wallet connection or account switch - attempt auto-login
-        if (account.isConnected && account.address && account.address !== previousAddress) {
+        // Handle account switch - logout if a different account is connected
+        if (account.isConnected && previousAddress && account.address !== previousAddress) {
           try {
-            const response = await fetch('/api/auth/login', {
+            await fetch('/api/auth/logout', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ walletAddress: account.address }),
               credentials: 'include',
             });
-
-            if (response.ok) {
-              const data = await response.json();
-              console.log('Auto-logged in as:', data.user.username);
-              // Force a page refresh to update auth state
-              window.location.reload();
-            }
-          } catch (loginError) {
-            // Silent fail - user is not registered yet
-            console.log('No existing account for this wallet');
+            console.log('Logged out due to account switch');
+          } catch (logoutError) {
+            console.error('Failed to logout on account switch:', logoutError);
           }
         }
       },
