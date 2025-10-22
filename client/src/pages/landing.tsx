@@ -25,6 +25,7 @@ export default function Landing() {
   const { address: walletAddress, isConnected, connect, disconnect } = useWallet();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const hasCheckedRef = useRef(false);
 
   const checkProfileMutation = useMutation({
     mutationFn: async (address: string) => {
@@ -33,11 +34,7 @@ export default function Landing() {
     },
     onSuccess: (data) => {
       // User has a profile, redirect to dashboard
-      toast({
-        title: "Welcome back!",
-        description: `Logged in as @${data.user.username}`,
-      });
-      setLocation("/app");
+      window.location.href = "/app";
     },
     onError: () => {
       // User doesn't have a profile, redirect to registration
@@ -48,6 +45,14 @@ export default function Landing() {
       setLocation("/register");
     },
   });
+
+  // Auto-check profile when wallet connects
+  useEffect(() => {
+    if (isConnected && walletAddress && !hasCheckedRef.current) {
+      hasCheckedRef.current = true;
+      checkProfileMutation.mutate(walletAddress);
+    }
+  }, [isConnected, walletAddress]);
 
   const handleConnect = async () => {
     if (!isConnected) {
@@ -63,20 +68,9 @@ export default function Landing() {
     }
   };
 
-  const handleContinue = () => {
-    if (isConnected && walletAddress) {
-      checkProfileMutation.mutate(walletAddress);
-    } else {
-      toast({
-        title: "Wallet not connected",
-        description: "Please connect your wallet first",
-        variant: "destructive",
-      });
-    }
-  };
-
   const handleDisconnect = async () => {
     try {
+      hasCheckedRef.current = false;
       await disconnect();
       toast({
         title: "Wallet disconnected",
@@ -112,15 +106,9 @@ export default function Landing() {
                   size="sm"
                   data-testid="button-disconnect"
                   onClick={handleDisconnect}
-                >
-                  Disconnect
-                </Button>
-                <Button 
-                  data-testid="button-continue"
-                  onClick={handleContinue}
                   disabled={checkProfileMutation.isPending}
                 >
-                  {checkProfileMutation.isPending ? "Loading..." : "Continue"}
+                  Disconnect
                 </Button>
               </div>
             ) : (
