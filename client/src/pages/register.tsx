@@ -80,10 +80,7 @@ export default function Register() {
 
   const registerMutation = useMutation({
     mutationFn: async (data: RegistrationFormValues & { walletAddress: string }) => {
-      const response = await apiRequest("POST", "/api/users", {
-        ...data,
-        minBasePrice: data.minBasePrice.toFixed(2),
-      });
+      const response = await apiRequest("POST", "/api/users", data);
       return await response.json();
     },
     onSuccess: (data: any) => {

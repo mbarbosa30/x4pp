@@ -18,7 +18,7 @@ function generateNullifier(walletAddress: string): string {
 // Registration endpoint
 router.post("/", async (req, res) => {
   try {
-    // Strict validation schema with all required fields
+    // Strict validation schema with new open bidding model
     const registrationSchema = z.object({
       username: z.string()
         .min(3, "Username must be at least 3 characters")
@@ -29,27 +29,11 @@ router.post("/", async (req, res) => {
         .max(100, "Display name must be at most 100 characters"),
       walletAddress: z.string()
         .regex(/^0x[a-fA-F0-9]{40}$/, "Invalid Celo/Ethereum address"),
-      basePrice: z.string()
-        .regex(/^\d+\.?\d*$/, "Base price must be a valid number")
-        .transform(val => parseFloat(val))
-        .refine(val => val >= 0.01 && val <= 100, "Base price must be between $0.01 and $100")
-        .transform(val => val.toFixed(2)),
-      surgeAlpha: z.string()
-        .regex(/^\d+\.?\d*$/, "Surge alpha must be a valid number")
-        .transform(val => parseFloat(val))
-        .refine(val => val >= 0 && val <= 10, "Surge alpha must be between 0 and 10")
-        .transform(val => val.toFixed(2)),
-      surgeK: z.string().optional().default("3.00"),
-      humanDiscountPct: z.string()
-        .regex(/^\d+\.?\d*$/, "Human discount must be a valid number")
-        .transform(val => parseFloat(val))
-        .refine(val => val >= 0 && val <= 1, "Human discount must be between 0 and 1")
-        .transform(val => val.toFixed(2)),
-      slotsPerWindow: z.number()
-        .int("Slots must be an integer")
-        .min(1, "Must have at least 1 slot")
-        .max(100, "Maximum 100 slots per window"),
-      timeWindow: z.enum(["hour", "day", "week", "month"]),
+      tokenId: z.string().min(1, "Payment token is required"),
+      isPublic: z.boolean(),
+      minBasePrice: z.number()
+        .min(0.01, "Minimum bid must be at least $0.01")
+        .max(100, "Minimum bid must be at most $100"),
       slaHours: z.number()
         .int("SLA hours must be an integer")
         .min(1, "SLA must be at least 1 hour")
@@ -84,7 +68,7 @@ router.post("/", async (req, res) => {
       return res.status(409).json({ error: "Account already exists" });
     }
 
-    // Create new user with all required fields explicitly set
+    // Create new user with new schema
     const [newUser] = await db
       .insert(users)
       .values({
@@ -92,12 +76,9 @@ router.post("/", async (req, res) => {
         displayName: validatedData.displayName,
         walletAddress: validatedData.walletAddress,
         selfNullifier: selfNullifier,
-        basePrice: validatedData.basePrice,
-        surgeAlpha: validatedData.surgeAlpha,
-        surgeK: validatedData.surgeK || "3.00",
-        humanDiscountPct: validatedData.humanDiscountPct,
-        slotsPerWindow: validatedData.slotsPerWindow,
-        timeWindow: validatedData.timeWindow,
+        tokenId: validatedData.tokenId,
+        isPublic: validatedData.isPublic,
+        minBasePrice: validatedData.minBasePrice.toFixed(2),
         slaHours: validatedData.slaHours,
         verified: false,
       })
