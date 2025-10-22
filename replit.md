@@ -35,6 +35,7 @@ Payment architecture uses EIP-3009 `transferWithAuthorization` for gasless USDC 
 - **USDC Contract Address**: `0xcebA9300f2b948710d2653dD7B07f33A8B32118C` (Circle's official native USDC on Celo mainnet)
 - **Chain ID**: 42220 (Celo mainnet)
 - **Decimals**: 6
+- **Database Initialization**: Automatic USDC token creation on app startup via `server/db-init.ts` (works in both dev and production)
 
 ### Authentication and Authorization
 

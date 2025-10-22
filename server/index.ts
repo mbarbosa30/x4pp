@@ -3,6 +3,7 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { startRefundMonitor } from "./services/refunds";
 import { sessionMiddleware } from "./session";
+import { initializeDatabase } from "./db-init";
 
 const app = express();
 app.use(express.json());
@@ -45,6 +46,9 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Initialize database (ensure USDC token exists)
+  await initializeDatabase();
+  
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
