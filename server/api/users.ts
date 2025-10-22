@@ -42,8 +42,11 @@ router.post("/", async (req, res) => {
 
     const validatedData = registrationSchema.parse(req.body);
 
+    // Normalize wallet address to lowercase for consistent storage
+    const normalizedWalletAddress = validatedData.walletAddress.toLowerCase();
+
     // Generate unique nullifier from wallet address
-    const selfNullifier = generateNullifier(validatedData.walletAddress);
+    const selfNullifier = generateNullifier(normalizedWalletAddress);
 
     // Check for existing username, wallet, or nullifier
     const [existing] = await db
@@ -51,7 +54,7 @@ router.post("/", async (req, res) => {
       .from(users)
       .where(or(
         eq(users.username, validatedData.username),
-        eq(users.walletAddress, validatedData.walletAddress),
+        eq(users.walletAddress, normalizedWalletAddress),
         eq(users.selfNullifier, selfNullifier)
       ))
       .limit(1);
@@ -74,7 +77,7 @@ router.post("/", async (req, res) => {
       .values({
         username: validatedData.username,
         displayName: validatedData.displayName,
-        walletAddress: validatedData.walletAddress,
+        walletAddress: normalizedWalletAddress,
         selfNullifier: selfNullifier,
         tokenId: validatedData.tokenId,
         isPublic: validatedData.isPublic,
