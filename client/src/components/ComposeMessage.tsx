@@ -5,7 +5,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Send, Shield, Wallet, TrendingUp } from "lucide-react";
+import { Send, Shield, Wallet, TrendingUp, Info } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { useWallet } from "@/providers/WalletProvider";
@@ -16,9 +16,18 @@ interface ComposeMessageProps {
   onSend?: (recipient: string, message: string, replyBounty: number) => void;
 }
 
+interface PriceGuide {
+  p25: number | null;
+  median: number | null;
+  p75: number | null;
+  minBasePrice: number;
+  sampleSize: number;
+}
+
 export default function ComposeMessage({ isVerified, onSend }: ComposeMessageProps) {
   const [recipient, setRecipient] = useState("");
   const [message, setMessage] = useState("");
+  const [bidAmount, setBidAmount] = useState(0.10);
   const [replyBounty, setReplyBounty] = useState(0);
   const [includeReplyBounty, setIncludeReplyBounty] = useState(false);
   const { toast } = useToast();
@@ -28,50 +37,46 @@ export default function ComposeMessage({ isVerified, onSend }: ComposeMessagePro
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [paymentRequirements, setPaymentRequirements] = useState<any>(null);
   const [isPaying, setIsPaying] = useState(false);
-  const [quote, setQuote] = useState<{ priceUSD: number; priceUSDC: string; surgeActive: boolean } | null>(null);
   const [originalCommitPayload, setOriginalCommitPayload] = useState<any>(null);
-  const [isLoadingQuote, setIsLoadingQuote] = useState(false);
+  const [priceGuide, setPriceGuide] = useState<PriceGuide | null>(null);
+  const [isLoadingPriceGuide, setIsLoadingPriceGuide] = useState(false);
 
-  // Fetch live price quote when recipient changes
+  // Fetch price guide when recipient changes (only if wallet connected)
   useEffect(() => {
-    if (!recipient) {
-      setQuote(null);
+    if (!recipient || !isConnected) {
+      setPriceGuide(null);
       return;
     }
 
-    const fetchQuote = async () => {
-      setIsLoadingQuote(true);
+    const fetchPriceGuide = async () => {
+      setIsLoadingPriceGuide(true);
       try {
-        const response = await fetch("/api/quote", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            recipientUsername: recipient,
-            senderNullifier: isVerified ? "demo_verified_user_001" : undefined,
-          }),
-        });
+        const response = await fetch(`/api/price-guide/${recipient}`);
 
         if (response.ok) {
           const data = await response.json();
-          setQuote({
-            priceUSD: data.priceUSD,
-            priceUSDC: data.priceUSDC,
-            surgeActive: data.surgeMultiplier > 1.0,
-          });
+          setPriceGuide(data);
+          
+          // Set initial bid to median (or minBasePrice if no data)
+          if (data.median) {
+            setBidAmount(data.median);
+          } else {
+            setBidAmount(data.minBasePrice);
+          }
         } else {
-          setQuote(null);
+          setPriceGuide(null);
         }
       } catch (error) {
-        console.error("Error fetching quote:", error);
-        setQuote(null);
+        console.error("Error fetching price guide:", error);
+        setPriceGuide(null);
       } finally {
-        setIsLoadingQuote(false);
+        setIsLoadingPriceGuide(false);
       }
     };
 
-    const debounceTimer = setTimeout(fetchQuote, 500);
+    const debounceTimer = setTimeout(fetchPriceGuide, 500);
     return () => clearTimeout(debounceTimer);
-  }, [recipient, isVerified]);
+  }, [recipient, isConnected]);
 
   const handleSend = async () => {
     if (!recipient || !message) {
@@ -83,18 +88,49 @@ export default function ComposeMessage({ isVerified, onSend }: ComposeMessagePro
       return;
     }
 
+    if (!isConnected || !walletAddress) {
+      toast({
+        title: "Wallet not connected",
+        description: "Please connect your wallet to see pricing and send messages",
+        variant: "destructive",
+      });
+      try {
+        await connect();
+      } catch (error) {
+        return;
+      }
+      return;
+    }
+
+    if (!priceGuide) {
+      toast({
+        title: "Loading pricing",
+        description: "Please wait for pricing information to load",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (bidAmount < priceGuide.minBasePrice) {
+      toast({
+        title: "Bid too low",
+        description: `Minimum bid is $${priceGuide.minBasePrice.toFixed(2)}`,
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
-      // Step 1: Generate and persist commit payload (so retry uses same data)
-      // Note: In production, senderNullifier should come from Self Protocol verification
-      // For MVP demo, use a consistent nullifier pattern
+      // Step 1: Generate commit payload with bid amount
       const commitRequest = {
         recipientUsername: recipient,
         senderNullifier: isVerified ? "demo_verified_user_001" : undefined,
         senderName: "Demo Sender",
         content: message,
-        replyBounty: includeReplyBounty ? replyBounty : undefined,
+        bidUsd: bidAmount.toFixed(2),
+        replyBounty: includeReplyBounty ? replyBounty.toFixed(2) : undefined,
       };
 
       // Save the payload for potential retry after payment
@@ -112,28 +148,28 @@ export default function ComposeMessage({ isVerified, onSend }: ComposeMessagePro
         // Payment required - show payment UI
         const data = await response.json();
         setPaymentRequirements(data.paymentRequirements[0]);
-        setQuote(data.quote);
         
         toast({
           title: "Payment Required",
-          description: `Pay ${data.quote.priceUSDC} USDC to send this message`,
+          description: `Sign authorization for ${bidAmount.toFixed(2)} USDC`,
         });
       } else if (response.ok) {
         // Message sent successfully
         const data = await response.json();
         
         toast({
-          title: "Message Sent",
-          description: "Your message has been delivered",
+          title: "Bid Submitted",
+          description: `Your message bid of $${bidAmount.toFixed(2)} is pending receiver's acceptance`,
         });
 
         // Reset form
         setRecipient("");
         setMessage("");
+        setBidAmount(0.10);
         setIncludeReplyBounty(false);
         setReplyBounty(0);
         setPaymentRequirements(null);
-        setQuote(null);
+        setPriceGuide(null);
         setOriginalCommitPayload(null);
 
         if (onSend) {
@@ -177,16 +213,15 @@ export default function ComposeMessage({ isVerified, onSend }: ComposeMessagePro
 
     try {
       // Step 2: Sign EIP-712 payment authorization with real wallet
-      // paymentRequirements.amount is already in smallest unit from backend
       const amountInSmallestUnit = BigInt(paymentRequirements.amount);
       
       const authParams = {
         from: walletAddress as `0x${string}`,
         to: paymentRequirements.recipient as `0x${string}`,
         value: amountInSmallestUnit,
-        validAfter: BigInt(0), // Valid immediately
-        validBefore: BigInt(paymentRequirements.validUntil),
-        nonce: paymentRequirements.nonce as `0x${string}`, // Backend now generates bytes32 nonces
+        validAfter: BigInt(0),
+        validBefore: BigInt(paymentRequirements.expiration),
+        nonce: paymentRequirements.nonce as `0x${string}`,
       };
 
       toast({
@@ -197,27 +232,28 @@ export default function ComposeMessage({ isVerified, onSend }: ComposeMessagePro
       // Sign the authorization
       const signatureHex = await signTransferAuthorization(authParams, walletAddress as `0x${string}`);
 
-      // Parse signature into v, r, s components (required by backend)
+      // Parse signature into v, r, s components
       const parsedSig = parseSignature(signatureHex);
 
-      // Create payment proof
+      // Create payment proof with validAfter/validBefore for settlement
       const paymentProof = {
         chainId: paymentRequirements.network.chainId,
-        tokenAddress: paymentRequirements.token.address,
+        tokenAddress: paymentRequirements.asset.address,
         amount: paymentRequirements.amount,
         sender: walletAddress,
         recipient: paymentRequirements.recipient,
-        nonce: paymentRequirements.nonce, // Already in bytes32 format from backend
-        expiration: paymentRequirements.validUntil,
-        signature: signatureHex, // Full signature for reference
-        v: parsedSig.v,
-        r: parsedSig.r,
-        s: parsedSig.s,
-        txHash: null, // Will be set by backend after settlement
+        nonce: paymentRequirements.nonce,
+        validAfter: 0,
+        validBefore: paymentRequirements.expiration,
+        signature: {
+          v: parsedSig.v,
+          r: parsedSig.r,
+          s: parsedSig.s,
+        },
+        txHash: null,
       };
 
-      // Step 3: Retry commit with SAME payload and payment proof
-      // CRITICAL: Must use originalCommitPayload, not generate new one
+      // Step 3: Retry commit with payment proof
       const response = await fetch("/api/commit", {
         method: "POST",
         headers: {
@@ -231,17 +267,18 @@ export default function ComposeMessage({ isVerified, onSend }: ComposeMessagePro
         const data = await response.json();
         
         toast({
-          title: "Message Sent!",
-          description: `Message delivered. Expires: ${new Date(data.expiresAt).toLocaleString()}`,
+          title: "Bid Submitted!",
+          description: `Message pending acceptance. Expires: ${new Date(data.expiresAt).toLocaleString()}`,
         });
 
         // Reset form
         setRecipient("");
         setMessage("");
+        setBidAmount(0.10);
         setIncludeReplyBounty(false);
         setReplyBounty(0);
         setPaymentRequirements(null);
-        setQuote(null);
+        setPriceGuide(null);
         setOriginalCommitPayload(null);
 
         if (onSend) {
@@ -267,13 +304,13 @@ export default function ComposeMessage({ isVerified, onSend }: ComposeMessagePro
     <Card className="p-6">
       <div className="space-y-6">
         <div>
-          <Label htmlFor="recipient">Recipient Address</Label>
+          <Label htmlFor="recipient">Recipient Username</Label>
           <Input
             id="recipient"
-            placeholder="0x..."
+            placeholder="username"
             value={recipient}
             onChange={(e) => setRecipient(e.target.value)}
-            className="font-mono mt-2"
+            className="mt-2"
             data-testid="input-recipient"
           />
         </div>
@@ -300,6 +337,115 @@ export default function ComposeMessage({ isVerified, onSend }: ComposeMessagePro
             )}
           </div>
         </div>
+
+        {/* Price Guide - only shown when wallet connected */}
+        {isConnected && recipient && (
+          <div className="border-t pt-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Info className="h-4 w-4 text-muted-foreground" />
+              <Label className="text-sm font-medium">Reference Pricing</Label>
+            </div>
+            
+            {isLoadingPriceGuide ? (
+              <div className="text-xs text-muted-foreground">Loading pricing data...</div>
+            ) : priceGuide ? (
+              <div className="space-y-3">
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="text-center p-2 bg-muted/50 rounded">
+                    <div className="text-xs text-muted-foreground mb-1">Min</div>
+                    <div className="font-mono font-semibold text-sm">
+                      ${priceGuide.minBasePrice.toFixed(2)}
+                    </div>
+                  </div>
+                  {priceGuide.median !== null && (
+                    <div className="text-center p-2 bg-primary/10 rounded border border-primary/20">
+                      <div className="text-xs text-muted-foreground mb-1">Typical</div>
+                      <div className="font-mono font-semibold text-sm">
+                        ${priceGuide.median.toFixed(2)}
+                      </div>
+                    </div>
+                  )}
+                  {priceGuide.p75 !== null && (
+                    <div className="text-center p-2 bg-muted/50 rounded">
+                      <div className="text-xs text-muted-foreground mb-1">High</div>
+                      <div className="font-mono font-semibold text-sm">
+                        ${priceGuide.p75.toFixed(2)}
+                      </div>
+                    </div>
+                  )}
+                </div>
+                
+                {priceGuide.sampleSize > 0 && (
+                  <div className="text-xs text-muted-foreground text-center">
+                    Based on {priceGuide.sampleSize} pending bid{priceGuide.sampleSize !== 1 ? 's' : ''}
+                  </div>
+                )}
+
+                {/* Bid Input with Quick Buttons */}
+                <div>
+                  <Label htmlFor="bid-amount">Your Bid (USDC)</Label>
+                  <div className="flex items-center gap-2 mt-2">
+                    <Input
+                      id="bid-amount"
+                      type="number"
+                      step="0.01"
+                      min={priceGuide.minBasePrice}
+                      value={bidAmount}
+                      onChange={(e) => setBidAmount(parseFloat(e.target.value) || priceGuide.minBasePrice)}
+                      className="max-w-32 font-mono"
+                      data-testid="input-bid-amount"
+                    />
+                    <div className="flex gap-1">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setBidAmount(priceGuide.minBasePrice)}
+                        data-testid="button-bid-min"
+                      >
+                        Min
+                      </Button>
+                      {priceGuide.median !== null && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setBidAmount(priceGuide.median!)}
+                          data-testid="button-bid-median"
+                        >
+                          Typical
+                        </Button>
+                      )}
+                      {priceGuide.p75 !== null && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setBidAmount(priceGuide.p75!)}
+                          data-testid="button-bid-high"
+                        >
+                          High
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  {bidAmount < priceGuide.minBasePrice && (
+                    <div className="text-xs text-destructive mt-1">
+                      Below minimum bid of ${priceGuide.minBasePrice.toFixed(2)}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="text-xs text-muted-foreground">Unable to load pricing data</div>
+            )}
+          </div>
+        )}
+
+        {!isConnected && (
+          <div className="border-t pt-4">
+            <div className="p-3 bg-muted/50 rounded text-sm text-muted-foreground text-center">
+              Connect wallet to see reference pricing and send messages
+            </div>
+          </div>
+        )}
 
         <div className="flex items-center gap-3">
           <Switch
@@ -328,13 +474,13 @@ export default function ComposeMessage({ isVerified, onSend }: ComposeMessagePro
         </div>
 
         <div className="border-t pt-6">
-          {paymentRequirements && quote ? (
+          {paymentRequirements ? (
             <div className="space-y-4">
               <div className="p-4 bg-muted rounded-md">
                 <div className="text-sm font-medium mb-2">Payment Required</div>
                 <div className="flex justify-between items-center mb-3">
-                  <span className="text-xs text-muted-foreground">Amount</span>
-                  <span className="font-mono font-semibold">{quote.priceUSDC} USDC</span>
+                  <span className="text-xs text-muted-foreground">Bid Amount</span>
+                  <span className="font-mono font-semibold">{bidAmount.toFixed(2)} USDC</span>
                 </div>
                 <div className="flex justify-between items-center mb-3">
                   <span className="text-xs text-muted-foreground">Network</span>
@@ -351,7 +497,6 @@ export default function ComposeMessage({ isVerified, onSend }: ComposeMessagePro
                   variant="outline"
                   onClick={() => {
                     setPaymentRequirements(null);
-                    setQuote(null);
                     setOriginalCommitPayload(null);
                   }}
                   disabled={isPaying}
@@ -370,52 +515,29 @@ export default function ComposeMessage({ isVerified, onSend }: ComposeMessagePro
                   ) : (
                     <>
                       <Wallet className="h-4 w-4 mr-2" />
-                      {isConnected ? "Sign & Send" : "Connect & Pay"}
+                      Sign & Send
                     </>
                   )}
                 </Button>
               </div>
             </div>
           ) : (
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div>
-                  <div className="text-sm text-muted-foreground mb-2">
-                    Estimated Price
-                  </div>
-                  {isLoadingQuote ? (
-                    <div className="text-xs text-muted-foreground">Loading...</div>
-                  ) : quote ? (
-                    <div className="flex items-center gap-2">
-                      <div className="font-mono font-semibold">{quote.priceUSDC} USDC</div>
-                      {quote.surgeActive && (
-                        <Badge variant="outline" className="text-xs gap-1" data-testid="badge-surge">
-                          <TrendingUp className="h-3 w-3" />
-                          Surge
-                        </Badge>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="text-xs text-muted-foreground">Enter recipient to see price</div>
-                  )}
-                </div>
-              </div>
-              <Button 
-                size="lg" 
-                onClick={handleSend} 
-                disabled={isSubmitting || !recipient || !message}
-                data-testid="button-send"
-              >
-                {isSubmitting ? (
-                  <>Initiating...</>
-                ) : (
-                  <>
-                    <Send className="h-4 w-4 mr-2" />
-                    Send Message
-                  </>
-                )}
-              </Button>
-            </div>
+            <Button 
+              size="lg" 
+              className="w-full"
+              onClick={handleSend} 
+              disabled={isSubmitting || !recipient || !message || !isConnected}
+              data-testid="button-send"
+            >
+              {isSubmitting ? (
+                <>Submitting Bid...</>
+              ) : (
+                <>
+                  <Send className="h-4 w-4 mr-2" />
+                  Send Message (${bidAmount.toFixed(2)})
+                </>
+              )}
+            </Button>
           )}
         </div>
       </div>
