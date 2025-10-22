@@ -5,6 +5,11 @@
 x4pp is a peer-to-peer messaging application with an innovative "attention market" model where sending messages requires humanity verification and dynamic pricing. The app enables users to monetize their attention by setting prices for incoming messages, with built-in protections against spam through verification gates and surge pricing mechanisms.
 
 **Recent Updates (Oct 22, 2025):**
+- **Wallet-Based Auto-Login Implemented ✅**: Seamless authentication when wallet connects
+  - Backend: Login endpoint now accepts walletAddress for auto-login
+  - Frontend: WalletProvider auto-logs in users when they connect their wallet
+  - Frontend: Auto-logout when disconnecting wallet for security
+  - Flow: Connect wallet → check if registered → auto-login if exists → page reload to update state
 - **Session-Based Authentication System Implemented ✅**: Fixed settings screen data synchronization
   - Backend: express-session with PostgreSQL store for persistent sessions
   - Backend: Auto-login after registration (sets userId and username in session)

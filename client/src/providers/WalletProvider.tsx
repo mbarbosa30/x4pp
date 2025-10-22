@@ -41,8 +41,29 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       const result = await connect(wagmiConfig, {
         connector: injected(),
       });
-      setAddress(result.accounts[0]);
+      const walletAddr = result.accounts[0];
+      setAddress(walletAddr);
       setIsConnected(true);
+
+      // Attempt auto-login if user exists with this wallet
+      try {
+        const response = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ walletAddress: walletAddr }),
+          credentials: 'include',
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          console.log('Auto-logged in as:', data.user.username);
+          // Force a page refresh to update auth state
+          window.location.reload();
+        }
+      } catch (loginError) {
+        // Silent fail - user is not registered yet
+        console.log('No existing account for this wallet');
+      }
     } catch (error) {
       console.error("Failed to connect wallet:", error);
       if (error instanceof ConnectorNotFoundError) {
@@ -59,6 +80,18 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       await disconnect(wagmiConfig);
       setAddress(undefined);
       setIsConnected(false);
+
+      // Logout from session
+      try {
+        await fetch('/api/auth/logout', {
+          method: 'POST',
+          credentials: 'include',
+        });
+        // Reload to update auth state
+        window.location.reload();
+      } catch (logoutError) {
+        console.error('Failed to logout:', logoutError);
+      }
     } catch (error) {
       console.error("Failed to disconnect wallet:", error);
       throw error;

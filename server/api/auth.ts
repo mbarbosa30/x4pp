@@ -40,10 +40,10 @@ router.get("/me", async (req, res) => {
 // Login with username (simple auth for MVP)
 router.post("/login", async (req, res) => {
   try {
-    const { username } = req.body;
+    const { username, walletAddress } = req.body;
 
-    if (!username) {
-      return res.status(400).json({ error: "Username is required" });
+    if (!username && !walletAddress) {
+      return res.status(400).json({ error: "Username or wallet address is required" });
     }
 
     const [user] = await db
@@ -55,7 +55,11 @@ router.post("/login", async (req, res) => {
         verified: users.verified,
       })
       .from(users)
-      .where(eq(users.username, username))
+      .where(
+        username 
+          ? eq(users.username, username)
+          : eq(users.walletAddress, walletAddress.toLowerCase())
+      )
       .limit(1);
 
     if (!user) {
