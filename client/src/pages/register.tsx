@@ -87,21 +87,23 @@ export default function Register() {
       return await response.json();
     },
     onSuccess: async (data: any) => {
+      console.log("Registration successful, user:", data.user.username);
+      
       toast({
         title: "Account created!",
         description: `Welcome @${data.user.username}!`,
       });
       
-      // Refetch auth data and wait for it to complete
-      await queryClient.refetchQueries({ queryKey: ["/api/auth/me"] });
+      // Wait a bit for session to be fully persisted
+      await new Promise(resolve => setTimeout(resolve, 500));
       
-      // Small delay to ensure session is fully established
-      await new Promise(resolve => setTimeout(resolve, 100));
+      console.log("Redirecting to /app");
       
-      // Navigate to dashboard
-      setLocation("/app");
+      // Use full page reload to ensure session cookie is picked up
+      window.location.href = "/app";
     },
     onError: (error: any) => {
+      console.error("Registration failed:", error);
       toast({
         title: "Registration failed",
         description: error.message || "Please try again",

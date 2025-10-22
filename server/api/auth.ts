@@ -8,7 +8,12 @@ const router = Router();
 // Get current authenticated user
 router.get("/me", async (req, res) => {
   try {
+    console.log("[Auth Check] Session ID:", req.sessionID);
+    console.log("[Auth Check] Session userId:", req.session.userId);
+    console.log("[Auth Check] Session username:", req.session.username);
+    
     if (!req.session.userId || !req.session.username) {
+      console.log("[Auth Check] No session found - returning 401");
       return res.status(401).json({ error: "Not authenticated" });
     }
 
@@ -26,10 +31,12 @@ router.get("/me", async (req, res) => {
 
     if (!user) {
       // Session exists but user was deleted
+      console.log("[Auth Check] Session exists but user not found in DB");
       req.session.destroy(() => {});
       return res.status(401).json({ error: "User not found" });
     }
 
+    console.log("[Auth Check] User authenticated:", user.username);
     res.json({ user });
   } catch (error) {
     console.error("Error fetching current user:", error);
