@@ -24,6 +24,8 @@ interface PriceGuide {
   p75: number | null;
   minBaseUsd: number;
   sampleSize: number;
+  isRegistered: boolean;
+  username: string | null;
 }
 
 export default function ComposeMessage({ isVerified, onSend, initialRecipient }: ComposeMessageProps) {
@@ -371,7 +373,7 @@ export default function ComposeMessage({ isVerified, onSend, initialRecipient }:
           </div>
         </div>
 
-        {/* Price Guide - only shown when wallet connected */}
+        {/* Price Guide - only shown when wallet connected AND recipient entered */}
         {isConnected && recipient && (
           <div className="border-t pt-4">
             <div className="flex items-center gap-2 mb-3">
@@ -383,96 +385,118 @@ export default function ComposeMessage({ isVerified, onSend, initialRecipient }:
               <div className="text-xs text-muted-foreground">Loading pricing data...</div>
             ) : priceGuide ? (
               <div className="space-y-3">
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="text-center p-2 bg-muted/50 rounded">
-                    <div className="text-xs text-muted-foreground mb-1">Min</div>
-                    <div className="font-mono font-semibold text-sm">
-                      ${priceGuide.minBaseUsd.toFixed(2)}
-                    </div>
-                  </div>
-                  {priceGuide.median !== null && (
-                    <div className="text-center p-2 bg-primary/10 rounded border border-primary/20">
-                      <div className="text-xs text-muted-foreground mb-1">Typical</div>
-                      <div className="font-mono font-semibold text-sm">
-                        ${priceGuide.median.toFixed(2)}
+                {/* Show market data only when there's actual data (sampleSize > 0) */}
+                {priceGuide.sampleSize > 0 ? (
+                  <>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="text-center p-2 bg-muted/50 rounded">
+                        <div className="text-xs text-muted-foreground mb-1">Min</div>
+                        <div className="font-mono font-semibold text-sm">
+                          ${priceGuide.minBaseUsd.toFixed(2)}
+                        </div>
+                      </div>
+                      <div className="text-center p-2 bg-primary/10 rounded border border-primary/20">
+                        <div className="text-xs text-muted-foreground mb-1">Typical</div>
+                        <div className="font-mono font-semibold text-sm">
+                          ${priceGuide.median!.toFixed(2)}
+                        </div>
+                      </div>
+                      <div className="text-center p-2 bg-muted/50 rounded">
+                        <div className="text-xs text-muted-foreground mb-1">High</div>
+                        <div className="font-mono font-semibold text-sm">
+                          ${priceGuide.p75!.toFixed(2)}
+                        </div>
                       </div>
                     </div>
-                  )}
-                  {priceGuide.p75 !== null && (
-                    <div className="text-center p-2 bg-muted/50 rounded">
-                      <div className="text-xs text-muted-foreground mb-1">High</div>
-                      <div className="font-mono font-semibold text-sm">
-                        ${priceGuide.p75.toFixed(2)}
+                    <div className="text-xs text-muted-foreground text-center">
+                      Based on {priceGuide.sampleSize} message{priceGuide.sampleSize !== 1 ? 's' : ''} to {priceGuide.username || 'this wallet'}
+                    </div>
+                  </>
+                ) : (
+                  <div className="p-3 bg-muted/50 rounded">
+                    <div className="flex justify-between items-center">
+                      <div className="text-sm font-medium">
+                        {priceGuide.isRegistered ? 'Minimum Bid' : 'Platform Default'}
+                      </div>
+                      <div className="font-mono font-semibold text-lg">
+                        ${priceGuide.minBaseUsd.toFixed(2)}
                       </div>
                     </div>
-                  )}
-                </div>
-                
-                {priceGuide.sampleSize > 0 && (
-                  <div className="text-xs text-muted-foreground text-center">
-                    Based on {priceGuide.sampleSize} pending bid{priceGuide.sampleSize !== 1 ? 's' : ''}
+                    <div className="text-xs text-muted-foreground mt-1">
+                      {priceGuide.isRegistered 
+                        ? `Set by ${priceGuide.username || 'recipient'}`
+                        : 'This wallet has not registered yet'}
+                    </div>
                   </div>
                 )}
-
-                {/* Bid Input with Quick Buttons */}
-                <div>
-                  <Label htmlFor="bid-amount">Your Bid (USDC)</Label>
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 mt-2">
-                    <Input
-                      id="bid-amount"
-                      type="number"
-                      lang="en-US"
-                      step="0.01"
-                      min={priceGuide.minBaseUsd}
-                      value={bidAmount}
-                      onChange={(e) => setBidAmount(parseFloat(e.target.value) || priceGuide.minBaseUsd)}
-                      className="max-w-32 font-mono"
-                      data-testid="input-bid-amount"
-                    />
-                    <div className="flex gap-1 flex-wrap">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setBidAmount(priceGuide.minBaseUsd)}
-                        data-testid="button-bid-min"
-                        className="text-xs"
-                      >
-                        Min
-                      </Button>
-                      {priceGuide.median !== null && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setBidAmount(priceGuide.median!)}
-                          data-testid="button-bid-median"
-                          className="text-xs"
-                        >
-                          Typical
-                        </Button>
-                      )}
-                      {priceGuide.p75 !== null && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setBidAmount(priceGuide.p75!)}
-                          data-testid="button-bid-high"
-                          className="text-xs"
-                        >
-                          High
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                  {bidAmount < priceGuide.minBaseUsd && (
-                    <div className="text-xs text-destructive mt-1">
-                      Below minimum bid of ${priceGuide.minBaseUsd.toFixed(2)}
-                    </div>
-                  )}
-                </div>
               </div>
             ) : (
               <div className="text-xs text-muted-foreground">Unable to load pricing data</div>
             )}
+          </div>
+        )}
+
+        {/* Bid Amount Input - always visible when wallet is connected */}
+        {isConnected && (
+          <div className="border-t pt-4">
+            <Label htmlFor="bid-amount" className="text-base font-medium">Your Bid Amount</Label>
+            <div className="mt-3 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                <div className="flex-1">
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl font-mono font-bold">${bidAmount.toFixed(2)}</span>
+                    <span className="text-sm text-muted-foreground">USDC</span>
+                  </div>
+                  <Input
+                    id="bid-amount"
+                    type="number"
+                    lang="en-US"
+                    step="0.01"
+                    min={priceGuide?.minBaseUsd || 0.10}
+                    value={bidAmount}
+                    onChange={(e) => setBidAmount(parseFloat(e.target.value) || (priceGuide?.minBaseUsd || 0.10))}
+                    className="mt-2 max-w-40 font-mono text-base"
+                    data-testid="input-bid-amount"
+                  />
+                </div>
+                {priceGuide && priceGuide.sampleSize > 0 && (
+                  <div className="flex gap-1 flex-wrap">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setBidAmount(priceGuide.minBaseUsd)}
+                      data-testid="button-bid-min"
+                      className="text-xs"
+                    >
+                      Min (${priceGuide.minBaseUsd.toFixed(2)})
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setBidAmount(priceGuide.median!)}
+                      data-testid="button-bid-median"
+                      className="text-xs"
+                    >
+                      Typical (${priceGuide.median!.toFixed(2)})
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setBidAmount(priceGuide.p75!)}
+                      data-testid="button-bid-high"
+                      className="text-xs"
+                    >
+                      High (${priceGuide.p75!.toFixed(2)})
+                    </Button>
+                  </div>
+                )}
+              </div>
+              {priceGuide && bidAmount < priceGuide.minBaseUsd && (
+                <div className="text-sm text-destructive">
+                  Below minimum bid of ${priceGuide.minBaseUsd.toFixed(2)}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
