@@ -478,8 +478,19 @@ export default function ComposeMessage({ isVerified, onSend, initialRecipient }:
 
         {!isConnected && (
           <div className="border-t pt-4">
-            <div className="p-3 bg-muted/50 rounded text-sm text-muted-foreground text-center">
-              Connect wallet to see reference pricing and send messages
+            <div className="p-4 bg-muted/50 rounded space-y-3">
+              <div className="text-sm text-muted-foreground text-center">
+                Connect your wallet to see reference pricing and send messages
+              </div>
+              <Button 
+                variant="default" 
+                className="w-full" 
+                onClick={() => connect()}
+                data-testid="button-connect-wallet"
+              >
+                <Wallet className="h-4 w-4 mr-2" />
+                Connect Wallet
+              </Button>
             </div>
           </div>
         )}
