@@ -59,24 +59,27 @@ export default function Register() {
 
   const activeTokens = tokens.filter((token) => token.isActive);
   
+  // Find default USDC token ID
+  const defaultTokenId = activeTokens.find((t) => t.symbol === "USDC")?.id || activeTokens[0]?.id || "";
+  
   const form = useForm<RegistrationFormValues>({
     resolver: zodResolver(registrationFormSchema),
     defaultValues: {
       username: "",
       displayName: "",
-      tokenId: "",
+      tokenId: defaultTokenId,
       isPublic: true,
       minBasePrice: 0.10,
       slaHours: 24,
     },
   });
 
+  // Update tokenId when tokens load
   useEffect(() => {
-    if (activeTokens.length > 0 && !form.getValues("tokenId")) {
-      const defaultTokenId = activeTokens.find((t) => t.symbol === "USDC")?.id || activeTokens[0].id;
+    if (defaultTokenId && !form.getValues("tokenId")) {
       form.setValue("tokenId", defaultTokenId);
     }
-  }, [activeTokens, form]);
+  }, [defaultTokenId, form]);
 
   const registerMutation = useMutation({
     mutationFn: async (data: RegistrationFormValues & { walletAddress: string }) => {
@@ -318,12 +321,12 @@ export default function Register() {
 
               <Button
                 type="submit"
-                disabled={registerMutation.isPending || !isConnected}
+                disabled={registerMutation.isPending || !isConnected || tokensLoading || !defaultTokenId}
                 className="w-full"
                 size="lg"
                 data-testid="button-register"
               >
-                {registerMutation.isPending ? "Creating Account..." : "Create Account"}
+                {tokensLoading ? "Loading..." : registerMutation.isPending ? "Creating Account..." : "Create Account"}
               </Button>
             </form>
           </Form>
