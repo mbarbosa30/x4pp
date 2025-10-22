@@ -46,16 +46,30 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        // Handle account switch - logout if a different account is connected
-        if (account.isConnected && previousAddress && account.address !== previousAddress) {
-          try {
-            await fetch('/api/auth/logout', {
-              method: 'POST',
-              credentials: 'include',
-            });
-            console.log('Logged out due to account switch');
-          } catch (logoutError) {
-            console.error('Failed to logout on account switch:', logoutError);
+        // Handle new wallet connection or account switch
+        if (account.isConnected && account.address) {
+          // If it's a new address or first connection, try auto-login
+          if (!previousAddress || account.address !== previousAddress) {
+            try {
+              const response = await fetch('/api/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ walletAddress: account.address }),
+                credentials: 'include',
+              });
+
+              if (response.ok) {
+                const data = await response.json();
+                console.log('Auto-logged in as:', data.user.username);
+                // Redirect to dashboard
+                window.location.href = '/app';
+              } else {
+                // User not registered, stay on current page
+                console.log('No account found for this wallet');
+              }
+            } catch (loginError) {
+              console.log('Auto-login failed:', loginError);
+            }
           }
         }
       },
