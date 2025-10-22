@@ -4,12 +4,8 @@ import { db } from "./db";
 import { users, messages, vouches, blocks, reputationScores, payments, insertMessageSchema, insertVouchSchema, insertBlockSchema } from "@shared/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { computeReputationScore, updateReputationScore, logReputationEvent } from "./reputation";
-import x402Routes from "./x402/routes";
 import selfRoutes from "./self/routes";
-import quoteRoutes from "./api/quote";
 import commitRoutes from "./api/commit";
-import inboxRoutes from "./api/inbox";
-import openRoutes from "./api/open";
 import reputationRoutes from "./api/reputation";
 import adminRoutes from "./api/admin";
 import profileRoutes from "./api/profile";
@@ -18,25 +14,17 @@ import authRoutes from "./api/auth";
 import tokensRoutes from "./api/tokens";
 import priceGuideRoutes from "./api/price-guide";
 import messagesRoutes from "./api/messages";
-import { startRefundMonitor } from "./refunds";
+import { startRefundMonitor } from "./services/refunds";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Mount authentication routes
   app.use("/api/auth", authRoutes);
   
-  // Mount x402 payment routes
-  app.use("/api/x402", x402Routes);
-  
   // Mount Self Protocol verification routes
   app.use("/api/self", selfRoutes);
   
-  // Mount quote and commit routes
-  app.use("/api/quote", quoteRoutes);
+  // Mount commit routes
   app.use("/api/commit", commitRoutes);
-  
-  // Mount inbox and open routes
-  app.use("/api/inbox", inboxRoutes);
-  app.use("/api/open", openRoutes);
   
   // Mount reputation routes
   app.use("/api/reputation", reputationRoutes);
