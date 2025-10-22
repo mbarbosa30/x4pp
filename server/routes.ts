@@ -14,9 +14,13 @@ import reputationRoutes from "./api/reputation";
 import adminRoutes from "./api/admin";
 import profileRoutes from "./api/profile";
 import usersRoutes from "./api/users";
+import authRoutes from "./api/auth";
 import { startRefundMonitor } from "./refunds";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Mount authentication routes
+  app.use("/api/auth", authRoutes);
+  
   // Mount x402 payment routes
   app.use("/api/x402", x402Routes);
   

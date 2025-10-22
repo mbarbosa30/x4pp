@@ -103,6 +103,10 @@ router.post("/", async (req, res) => {
       })
       .returning();
 
+    // Auto-login user after successful registration
+    req.session.userId = newUser.id;
+    req.session.username = newUser.username;
+
     res.status(201).json({
       success: true,
       user: {
