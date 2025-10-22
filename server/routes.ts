@@ -16,6 +16,8 @@ import profileRoutes from "./api/profile";
 import usersRoutes from "./api/users";
 import authRoutes from "./api/auth";
 import tokensRoutes from "./api/tokens";
+import priceGuideRoutes from "./api/price-guide";
+import messagesRoutes from "./api/messages";
 import { startRefundMonitor } from "./refunds";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -50,6 +52,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Mount token management routes
   app.use("/api/tokens", tokensRoutes);
+  
+  // Mount price guide routes
+  app.use("/api/price-guide", priceGuideRoutes);
+  
+  // Mount message management routes
+  app.use("/api/messages", messagesRoutes);
   
   // Start auto-refund monitor
   startRefundMonitor();
@@ -96,14 +104,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { username } = req.params;
       let user = await db
         .select({
-          basePrice: users.basePrice,
-          surgeAlpha: users.surgeAlpha,
-          surgeK: users.surgeK,
-          humanDiscountPct: users.humanDiscountPct,
-          slotsPerWindow: users.slotsPerWindow,
-          timeWindow: users.timeWindow,
+          minBasePrice: users.minBasePrice,
           slaHours: users.slaHours,
           walletAddress: users.walletAddress,
+          tokenId: users.tokenId,
         })
         .from(users)
         .where(eq(users.username, username))
@@ -121,14 +125,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Fetch the newly created user
         user = await db
           .select({
-            basePrice: users.basePrice,
-            surgeAlpha: users.surgeAlpha,
-            surgeK: users.surgeK,
-            humanDiscountPct: users.humanDiscountPct,
-            slotsPerWindow: users.slotsPerWindow,
-            timeWindow: users.timeWindow,
+            minBasePrice: users.minBasePrice,
             slaHours: users.slaHours,
             walletAddress: users.walletAddress,
+            tokenId: users.tokenId,
           })
           .from(users)
           .where(eq(users.username, username))
@@ -147,14 +147,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { username } = req.params;
       const {
-        basePrice,
-        surgeAlpha,
-        surgeK,
-        humanDiscountPct,
-        slotsPerWindow,
-        timeWindow,
+        minBasePrice,
         slaHours,
         walletAddress,
+        tokenId,
       } = req.body;
 
       // Check if user exists
@@ -171,26 +167,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
           displayName: username.charAt(0).toUpperCase() + username.slice(1).replace(/_/g, ' '),
           selfNullifier: `${username}_nullifier`,
           verified: false,
-          basePrice,
-          surgeAlpha,
-          surgeK,
-          humanDiscountPct,
-          slotsPerWindow,
-          timeWindow,
+          minBasePrice,
           slaHours,
           walletAddress,
+          tokenId,
         });
 
         // Return the newly created user settings
         return res.json({
-          basePrice,
-          surgeAlpha,
-          surgeK,
-          humanDiscountPct,
-          slotsPerWindow,
-          timeWindow,
+          minBasePrice,
           slaHours,
           walletAddress,
+          tokenId,
         });
       }
 
@@ -198,25 +186,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const [updatedUser] = await db
         .update(users)
         .set({
-          basePrice,
-          surgeAlpha,
-          surgeK,
-          humanDiscountPct,
-          slotsPerWindow,
-          timeWindow,
+          minBasePrice,
           slaHours,
           walletAddress,
+          tokenId,
         })
         .where(eq(users.username, username))
         .returning({
-          basePrice: users.basePrice,
-          surgeAlpha: users.surgeAlpha,
-          surgeK: users.surgeK,
-          humanDiscountPct: users.humanDiscountPct,
-          slotsPerWindow: users.slotsPerWindow,
-          timeWindow: users.timeWindow,
+          minBasePrice: users.minBasePrice,
           slaHours: users.slaHours,
           walletAddress: users.walletAddress,
+          tokenId: users.tokenId,
         });
 
       res.json(updatedUser);

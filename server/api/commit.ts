@@ -1,9 +1,7 @@
 import { Router } from "express";
 import { db } from "../db";
-import { users, messages, payments, tokens, insertMessageSchema } from "@shared/schema";
+import { users, messages, payments, tokens } from "@shared/schema";
 import { eq } from "drizzle-orm";
-import { calculatePriceForUser } from "../pricing";
-import { getQueuedMessageCount, enqueueMessage } from "../queue";
 import { verifyPayment } from "../x402/middleware";
 import { logReputationEvent } from "../reputation";
 
@@ -11,18 +9,27 @@ const router = Router();
 
 /**
  * POST /api/commit
- * Commit a message with x402 payment flow
+ * Commit a message with x402 payment flow (open bidding model)
  * 
+ * - Sender provides bidUsd parameter (their bid amount)
  * - If no X-PAYMENT header: return HTTP 402 with PaymentRequirements
- * - If X-PAYMENT header present: verify payment, create message, enqueue
+ * - If X-PAYMENT header present: verify payment, create PENDING message (not settled)
+ * - Payment is escrowed until receiver accepts/declines
  */
 router.post("/", async (req, res) => {
   try {
-    const { recipientUsername, content, senderNullifier, senderName, senderEmail, replyBounty } = req.body;
+    const { recipientUsername, content, senderNullifier, senderName, senderEmail, replyBounty, bidUsd } = req.body;
 
-    if (!recipientUsername || !content || !senderName) {
+    if (!recipientUsername || !content || !senderName || !bidUsd) {
       return res.status(400).json({ 
-        error: "recipientUsername, content, and senderName are required" 
+        error: "recipientUsername, content, senderName, and bidUsd are required" 
+      });
+    }
+    
+    const bidAmount = parseFloat(bidUsd);
+    if (isNaN(bidAmount) || bidAmount <= 0) {
+      return res.status(400).json({ 
+        error: "bidUsd must be a positive number" 
       });
     }
 
@@ -54,32 +61,18 @@ router.post("/", async (req, res) => {
         error: "Recipient's selected payment token is not available" 
       });
     }
-
-    // Calculate price (use recipient.id for consistent queue tracking)
-    const recipientIdentifier = recipient.selfNullifier || recipient.id;
-    const queuedMessages = await getQueuedMessageCount(recipientIdentifier);
     
-    // Check if sender is verified human
-    let isHuman = false;
-    if (senderNullifier) {
-      const [sender] = await db
-        .select()
-        .from(users)
-        .where(eq(users.selfNullifier, senderNullifier))
-        .limit(1);
-      isHuman = sender?.verified || false;
-    }
-    
-    const quote = calculatePriceForUser(recipient, queuedMessages, isHuman);
-    const amountUSD = parseFloat(quote.priceUSD);
-    
-    // Check slot capacity before accepting payment
-    if (queuedMessages >= recipient.slotsPerWindow) {
-      return res.status(503).json({
-        error: "Recipient inbox is full",
-        message: `All ${recipient.slotsPerWindow} attention slots are currently occupied. Try again later.`
+    // Check that bid meets minimum base price
+    const minBasePrice = parseFloat(recipient.minBasePrice || "0.05");
+    if (bidAmount < minBasePrice) {
+      return res.status(400).json({
+        error: "Bid too low",
+        message: `Bid must be at least $${minBasePrice.toFixed(2)} (recipient's minimum)`,
+        minBasePrice,
       });
     }
+
+    const recipientIdentifier = recipient.selfNullifier || recipient.id;
 
     // Check for payment header
     const paymentHeader = req.headers['x-payment'] as string;
@@ -94,7 +87,7 @@ router.post("/", async (req, res) => {
       return res.status(402).json({
         error: "Payment required",
         paymentRequirements: [{
-          amount: amountUSD.toFixed(paymentToken.decimals),
+          amount: bidAmount.toFixed(paymentToken.decimals),
           network: {
             chainId: paymentToken.chainId,
           },
@@ -107,8 +100,8 @@ router.post("/", async (req, res) => {
           expiration: Date.now() + 15 * 60 * 1000, // 15 minutes
         }],
         quote: {
-          priceUSD: amountUSD,
-          price: amountUSD.toFixed(paymentToken.decimals),
+          bidUsd: bidAmount,
+          price: bidAmount.toFixed(paymentToken.decimals),
           tokenSymbol: paymentToken.symbol,
         },
       });
@@ -125,7 +118,7 @@ router.post("/", async (req, res) => {
     // SECURITY: Pass server-determined recipient wallet and token details to prevent payment theft
     const paymentValid = await verifyPayment(
       paymentProof, 
-      amountUSD, 
+      bidAmount, 
       recipient.walletAddress,
       paymentToken.address,
       paymentToken.chainId,
@@ -142,7 +135,7 @@ router.post("/", async (req, res) => {
       return res.status(402).json({ 
         error: "Payment verification failed",
         paymentRequirements: [{
-          amount: amountUSD.toFixed(paymentToken.decimals),
+          amount: bidAmount.toFixed(paymentToken.decimals),
           network: {
             chainId: paymentToken.chainId,
           },
@@ -155,14 +148,14 @@ router.post("/", async (req, res) => {
           expiration: Date.now() + 15 * 60 * 1000,
         }],
         quote: {
-          priceUSD: amountUSD,
-          price: amountUSD.toFixed(paymentToken.decimals),
+          bidUsd: bidAmount,
+          price: bidAmount.toFixed(paymentToken.decimals),
           tokenSymbol: paymentToken.symbol,
         },
       });
     }
 
-    // Payment verified - create message with consistent recipient identifier
+    // Payment verified - create PENDING message (not auto-accepted in open bidding model)
     const finalSenderNullifier = senderNullifier || `anon_${Date.now()}`;
     const expiresAt = new Date(Date.now() + (recipient.slaHours * 60 * 60 * 1000));
 
@@ -170,41 +163,45 @@ router.post("/", async (req, res) => {
       .insert(messages)
       .values({
         senderNullifier: finalSenderNullifier,
-        recipientNullifier: recipientIdentifier, // Use same identifier as queue counting
+        recipientNullifier: recipientIdentifier,
         senderName,
         senderEmail: senderEmail || null,
         content,
-        amount: amountUSD.toFixed(2),
+        bidUsd: bidAmount.toFixed(2),
         replyBounty: replyBounty ? parseFloat(replyBounty).toFixed(2) : null,
-        status: "pending",
+        status: "pending", // Stays pending until receiver accepts/declines
         expiresAt,
       })
       .returning();
 
-    // Store payment record
+    // Store payment record as PENDING (escrowed, not settled yet)
+    // Store complete signature object with validAfter/validBefore for later settlement
+    const signatureWithParams = JSON.stringify({
+      ...paymentProof.signature,
+      validAfter: paymentProof.validAfter || 0,
+      validBefore: paymentProof.validBefore || Math.floor(Date.now() / 1000) + 3600,
+    });
+    
     await db.insert(payments).values({
       messageId: newMessage.id,
       chainId: paymentProof.chainId || paymentToken.chainId,
       tokenAddress: paymentProof.tokenAddress || paymentToken.address,
-      amount: amountUSD.toFixed(paymentToken.decimals),
+      amount: bidAmount.toFixed(paymentToken.decimals),
       sender: paymentProof.sender || senderNullifier,
       recipient: recipient.walletAddress,
       txHash: paymentProof.txHash,
-      status: "settled",
+      status: "pending", // Escrowed until acceptance
       nonce: paymentProof.nonce,
-      signature: paymentProof.signature,
-      settledAt: new Date(),
+      signature: signatureWithParams,
     });
-
-    // Enqueue message (use same identifier as message storage)
-    await enqueueMessage(newMessage.id, recipientIdentifier, amountUSD, expiresAt);
 
     // Log reputation event
     await logReputationEvent(finalSenderNullifier, "sent", newMessage.id);
 
     res.status(200).json({
       messageId: newMessage.id,
-      status: "delivered",
+      status: "pending",
+      bidUsd: bidAmount,
       expiresAt: expiresAt.toISOString(),
     });
 

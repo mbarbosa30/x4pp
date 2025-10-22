@@ -276,3 +276,53 @@ export async function getUSDCBalance(address: Address): Promise<string> {
     return '0';
   }
 }
+
+/**
+ * Settle an escrowed payment (for open bidding model)
+ * Executes the ORIGINAL payment authorization signed by sender
+ * IMPORTANT: We must replay the exact authorization parameters from commit
+ */
+export async function settlePayment(payment: any): Promise<string> {
+  // Parse the signature that was stored during commit
+  const sig = JSON.parse(payment.signature);
+  
+  // Reconstruct the ORIGINAL authorization (don't change validAfter/validBefore!)
+  const auth: PaymentAuthorization = {
+    from: payment.sender as Address,
+    to: payment.recipient as Address,
+    value: payment.amount,
+    validAfter: sig.validAfter || 0,
+    validBefore: sig.validBefore || Math.floor(Date.now() / 1000) + 3600,
+    nonce: payment.nonce as Hex,
+    signature: {
+      v: sig.v,
+      r: sig.r as Hex,
+      s: sig.s as Hex,
+    },
+  };
+
+  const result = await executeSettlement(auth, payment.tokenAddress, payment.decimals);
+  
+  if (!result.success) {
+    throw new Error(`Settlement failed: ${result.error}`);
+  }
+  
+  return result.txHash || '';
+}
+
+/**
+ * Refund an escrowed payment (for declined/expired messages)
+ * In EIP-3009 model, "refund" just means marking the authorization unused
+ * NO on-chain transfer needed - funds never left sender's wallet
+ */
+export async function refundPayment(payment: any, reason: string): Promise<string> {
+  // In open bidding with EIP-3009, the sender signed an authorization but it wasn't executed
+  // When we decline/expire, we simply DON'T execute it - no refund transfer needed
+  // The authorization becomes invalid and funds stay in sender's wallet
+  
+  console.log(`Marking authorization unused for ${payment.sender} (reason: ${reason})`);
+  console.log(`Authorization nonce ${payment.nonce} will not be executed`);
+  
+  // Return empty tx hash since no on-chain action is needed
+  return '';
+}

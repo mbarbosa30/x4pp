@@ -22,12 +22,7 @@ export const users = pgTable("users", {
   displayName: text("display_name").notNull(),
   tokenId: varchar("token_id").references(() => tokens.id), // Preferred payment token (foreign key to tokens)
   isPublic: boolean("is_public").notNull().default(true), // Public profile visibility
-  basePrice: decimal("base_price", { precision: 10, scale: 2 }).notNull().default("0.05"),
-  surgeAlpha: decimal("surge_alpha", { precision: 4, scale: 2 }).notNull().default("1.5"), // Surge pricing coefficient
-  surgeK: decimal("surge_k", { precision: 4, scale: 2 }).notNull().default("2.0"), // Surge pricing exponent
-  humanDiscountPct: decimal("human_discount_pct", { precision: 5, scale: 2 }).notNull().default("0.90"), // 90% discount for verified humans
-  slotsPerWindow: integer("slots_per_window").notNull().default(5),
-  timeWindow: text("time_window").notNull().default("hour"),
+  minBasePrice: decimal("min_base_price", { precision: 10, scale: 2 }).notNull().default("0.05"), // Minimum bid amount in USD
   slaHours: integer("sla_hours").notNull().default(24), // Hours before auto-refund
   verified: boolean("verified").notNull().default(false),
   verifiedAt: timestamp("verified_at"),
@@ -42,11 +37,13 @@ export const messages = pgTable("messages", {
   senderName: text("sender_name").notNull(),
   senderEmail: text("sender_email"),
   content: text("content").notNull(),
-  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  bidUsd: decimal("bid_usd", { precision: 10, scale: 2 }).notNull(), // Sender's bid amount in USD
   replyBounty: decimal("reply_bounty", { precision: 10, scale: 2 }),
-  status: text("status").notNull().default("pending"), // pending, delivered, opened, replied, refunded, expired
+  status: text("status").notNull().default("pending"), // pending, accepted, declined, expired, withdrawn
   sentAt: timestamp("sent_at").notNull().defaultNow(),
   expiresAt: timestamp("expires_at").notNull(), // SLA deadline for auto-refund
+  acceptedAt: timestamp("accepted_at"),
+  declinedAt: timestamp("declined_at"),
   openedAt: timestamp("opened_at"),
   repliedAt: timestamp("replied_at"),
   refundedAt: timestamp("refunded_at"),
@@ -135,6 +132,8 @@ export const insertUserSchema = createInsertSchema(users).omit({
 export const insertMessageSchema = createInsertSchema(messages).omit({
   id: true,
   sentAt: true,
+  acceptedAt: true,
+  declinedAt: true,
   openedAt: true,
   repliedAt: true,
   refundedAt: true,
