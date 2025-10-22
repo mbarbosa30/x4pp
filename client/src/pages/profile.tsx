@@ -6,16 +6,14 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Link } from "wouter";
 import {
   Mail,
-  Shield,
   DollarSign,
   Clock,
-  TrendingUp,
-  CheckCircle,
   Copy,
   Settings,
   ExternalLink,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import VerificationBadge from "@/components/VerificationBadge";
 
 interface ProfileData {
@@ -24,12 +22,7 @@ interface ProfileData {
   displayName: string;
   verified: boolean;
   walletAddress: string | null;
-  basePrice: string;
-  surgeAlpha: string;
-  surgeK: string;
-  humanDiscountPct: string;
-  slotsPerWindow: number;
-  timeWindow: string;
+  minBasePrice: string;
   slaHours: number;
   stats: {
     messagesReceived: number;
@@ -46,16 +39,17 @@ interface ProfileData {
 
 export default function Profile() {
   const { toast } = useToast();
+  const { user, isAuthenticated, isLoading: isLoadingAuth } = useAuth();
   
-  // For demo purposes, use a default username
-  // In production, this would come from user authentication
-  const currentUsername = "demo_user";
+  const currentUsername = user?.username;
 
   const { data: profile, isLoading } = useQuery<ProfileData>({
     queryKey: ['/api/profile', currentUsername],
+    enabled: !!currentUsername,
   });
 
   const copyShareableLink = () => {
+    if (!currentUsername) return;
     const link = `${window.location.origin}/@${currentUsername}`;
     navigator.clipboard.writeText(link);
     toast({
@@ -64,7 +58,8 @@ export default function Profile() {
     });
   };
 
-  if (isLoading) {
+  // Show loading state
+  if (isLoadingAuth || isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-muted-foreground">Loading profile...</div>
@@ -72,6 +67,21 @@ export default function Profile() {
     );
   }
 
+  // Show login prompt if not authenticated
+  if (!isAuthenticated || !user) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <p className="text-muted-foreground">Please log in to view your profile</p>
+          <Link href="/">
+            <Button>Go to Home</Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error if profile not found
   if (!profile) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -128,11 +138,7 @@ export default function Profile() {
               <div className="flex flex-wrap gap-2">
                 <Badge variant="outline">
                   <DollarSign className="h-3 w-3 mr-1" />
-                  ${parseFloat(profile.basePrice).toFixed(2)} base price
-                </Badge>
-                <Badge variant="outline">
-                  <Mail className="h-3 w-3 mr-1" />
-                  {profile.slotsPerWindow} slots/{profile.timeWindow}
+                  ${parseFloat(profile.minBasePrice).toFixed(2)} minimum bid
                 </Badge>
                 <Badge variant="outline">
                   <Clock className="h-3 w-3 mr-1" />
@@ -181,7 +187,7 @@ export default function Profile() {
           <Card className="p-6">
             <div className="space-y-2">
               <div className="flex items-center text-muted-foreground">
-                <CheckCircle className="h-4 w-4 mr-2" />
+                <Mail className="h-4 w-4 mr-2" />
                 <span className="text-sm">Messages Opened</span>
               </div>
               <p className="text-3xl font-bold" data-testid="stat-messages-opened">{profile.stats.messagesOpened}</p>
@@ -194,33 +200,23 @@ export default function Profile() {
                 <DollarSign className="h-4 w-4 mr-2" />
                 <span className="text-sm">Total Earned</span>
               </div>
-              <p className="text-3xl font-bold text-success" data-testid="stat-total-earned">${profile.stats.totalEarned}</p>
+              <p className="text-3xl font-bold text-primary" data-testid="stat-total-earned">${profile.stats.totalEarned}</p>
             </div>
           </Card>
         </div>
 
-        {/* Pricing & Settings */}
+        {/* Pricing Configuration */}
         <Card className="p-6">
           <h3 className="text-lg font-semibold mb-4">Pricing Configuration</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <p className="text-sm text-muted-foreground mb-1">Base Price</p>
-              <p className="text-2xl font-bold">${parseFloat(profile.basePrice).toFixed(2)} USDC</p>
+              <p className="text-sm text-muted-foreground mb-1">Minimum Bid</p>
+              <p className="text-2xl font-bold">${parseFloat(profile.minBasePrice).toFixed(2)} USDC</p>
             </div>
             
             <div>
-              <p className="text-sm text-muted-foreground mb-1">Surge Pricing</p>
-              <p className="text-2xl font-bold">{parseFloat(profile.surgeAlpha).toFixed(1)}x sensitivity</p>
-            </div>
-
-            <div>
-              <p className="text-sm text-muted-foreground mb-1">Human Discount</p>
-              <p className="text-2xl font-bold">{Math.round(parseFloat(profile.humanDiscountPct) * 100)}% off</p>
-            </div>
-
-            <div>
-              <p className="text-sm text-muted-foreground mb-1">Attention Slots</p>
-              <p className="text-2xl font-bold">{profile.slotsPerWindow} per {profile.timeWindow}</p>
+              <p className="text-sm text-muted-foreground mb-1">Response SLA</p>
+              <p className="text-2xl font-bold">{profile.slaHours} hours</p>
             </div>
           </div>
         </Card>

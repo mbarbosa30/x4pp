@@ -74,12 +74,7 @@ router.get("/:username", async (req, res) => {
       verified: user.verified,
       isPublic: user.isPublic,
       walletAddress: user.walletAddress,
-      basePrice: user.basePrice,
-      surgeAlpha: user.surgeAlpha,
-      surgeK: user.surgeK,
-      humanDiscountPct: user.humanDiscountPct,
-      slotsPerWindow: user.slotsPerWindow,
-      timeWindow: user.timeWindow,
+      minBasePrice: user.minBasePrice,
       slaHours: user.slaHours,
       stats: {
         messagesReceived: Number(messagesReceived),
