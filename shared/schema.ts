@@ -32,8 +32,12 @@ export const users = pgTable("users", {
 
 export const messages = pgTable("messages", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  senderNullifier: text("sender_nullifier").notNull(),
-  recipientNullifier: text("recipient_nullifier").notNull(),
+  // Wallet-based routing (new primary identifiers)
+  senderWallet: text("sender_wallet").notNull(),
+  recipientWallet: text("recipient_wallet").notNull(),
+  // Legacy nullifier fields (deprecated - kept for backward compatibility)
+  senderNullifier: text("sender_nullifier"),
+  recipientNullifier: text("recipient_nullifier"),
   senderName: text("sender_name").notNull(),
   senderEmail: text("sender_email"),
   content: text("content").notNull(),
@@ -41,7 +45,7 @@ export const messages = pgTable("messages", {
   replyBounty: decimal("reply_bounty", { precision: 10, scale: 2 }),
   status: text("status").notNull().default("pending"), // pending, accepted, declined, expired, withdrawn
   sentAt: timestamp("sent_at").notNull().defaultNow(),
-  expiresAt: timestamp("expires_at").notNull(), // SLA deadline for auto-refund
+  expiresAt: timestamp("expires_at").notNull(), // Sender-controlled expiration
   acceptedAt: timestamp("accepted_at"),
   declinedAt: timestamp("declined_at"),
   openedAt: timestamp("opened_at"),
