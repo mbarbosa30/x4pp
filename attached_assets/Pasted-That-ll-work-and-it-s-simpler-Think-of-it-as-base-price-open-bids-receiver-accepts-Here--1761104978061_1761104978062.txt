@@ -1,0 +1,178 @@
+That’ll work—and it’s simpler. Think of it as **“base price + open bids + receiver accepts.”** Here’s a tight plan you can ship fast.
+
+# How it works (at a glance)
+
+* **Receiver sets one thing:** `min_base_price` (e.g., $0.05).
+* **Sender chooses a bid:** any amount ≥ `min_base_price`.
+* **Guidance shown:** a **reference price range** (e.g., P25–P75 and median of current bids waiting for this receiver).
+* **Escrow on send:** sender’s bid is **pre-authorized/escrowed** via x402.
+* **Receiver reviews & accepts:** acceptance → **settle** the escrow to receiver; decline/expire → **refund** to sender.
+
+---
+
+# UX flow
+
+## Sender
+
+1. Type message → see **reference range** (e.g., “Most accepted bids: $0.06–$0.18 · median $0.11 · min $0.05”).
+2. Enter bid ≥ min (quick buttons: min / median / top-of-queue).
+3. Tap **Send** → x402 **402→pay→retry**; funds escrowed.
+4. Status chip: “Pending • Expires in 24h”. If not accepted by expiry → auto-refund.
+
+## Receiver
+
+* **Pending tab:** list sorted by **bid** (desc) with small signals (sender rep, tag, preview).
+* Actions per item: **Accept** (settle), **Skip** (leave pending), **Decline** (refund now), **Block**.
+* Optional **bulk accept**: accept top N or all above a threshold.
+
+---
+
+# Reference pricing (simple & robust)
+
+For receiver `R`, compute from **currently pending** bids (and recent accepted ones for stability):
+
+* `min_base_price` (from R’s settings)
+* `p25`, `median`, `p75` of `{pending_bids}` (fallback to recent_accepted if < 5 pending)
+* `accept_rate_by_bucket` (optional: show “last week, 72% of $0.10–$0.15 were accepted”)
+
+Display:
+“**Guide:** most bids land **$p25–$p75** (median **$median**). Minimum **$min_base_price**.”
+
+Formula detail (server):
+
+* Use **winsorized** percentiles to avoid outliers (clip to [min_base_price, p95] before computing p25/median/p75).
+* If `pending_count < 5`, blend 50% with last-7d accepted bids.
+
+---
+
+# Payments & escrow (x402)
+
+* **On send (commit):** API responds **HTTP 402** with `PaymentRequirements(amount=bid_usd, token=USDC, chain=Celo)`.
+  Client pays → retry with `X-PAYMENT` → server records **escrowed** message.
+* **On accept:** server calls facilitator **settle to receiver** (or mark escrow “released” if facilitator settles on accept trigger).
+* **On decline/expire:** server initiates **refund** to sender (minus tiny infra fee if you want).
+
+This uses the standard x402 “402→pay→retry” and keeps **money off-chain until acceptance** from your app’s POV, while users experience instant UX.
+
+---
+
+# API (minimal)
+
+### Sender
+
+* `GET /price-guide?recipientId=R` → `{ minBaseUSD, p25, median, p75, sampleSize }`
+* `POST /messages/commit` → `{ recipientId, message, bidUSD, selfProof? }`
+
+  * If unpaid → **402** with x402 `PaymentRequirements`.
+  * After retry (paid) → `200 { messageId, status:"pending", expiresAt }`
+* `POST /messages/withdraw` → `{ messageId }` → if pending & not viewed, refund and mark withdrawn.
+
+### Receiver
+
+* `GET /inbox/pending?recipientId=R` → list pending (bid, preview, sender facts, placedAt, expiresAt)
+* `POST /messages/accept` → `{ messageId }` → settles escrow to receiver
+* `POST /messages/decline` → `{ messageId }` → refund to sender
+* `POST /blocks/create` → `{ senderNullifier }`
+
+### System
+
+* **Cron**: `expire_pending()` → refund past `expiresAt`
+* **Optional**: `POST /bulk-accept` with `minBidUSD` or `topN`
+
+---
+
+# Data model (Postgres)
+
+* `recipients(id pk, min_base_usd, sla_hours default 24)`
+* `messages(id pk, sender_nullifier, recipient_id, body_cipher, bid_usd, status enum('pending','accepted','declined','expired','withdrawn'), created_at, expires_at, accepted_at)`
+* `payments(message_id fk, amount_usdc, chain_id, tx_hash_auth, tx_hash_settle, tx_hash_refund, settled_at, refunded_at)`
+* `price_stats(recipient_id, window_day, p25, median, p75, sample_size)`  *(optional cache for speed)*
+* `blocks(recipient_id, sender_nullifier, at)`
+* `users(nullifier pk, first_seen, last_seen, is_human boolean, last_self_check_at)`
+
+---
+
+# Reputation (slots not needed)
+
+Keep it lightweight and compatible:
+
+* **Sender facts:** Opens LB%, Replies LB%, 90-day blocks/refunds (small, decayed).
+* **Recipient facts:** Acceptance rate (last 7d), median acceptance price, avg open time.
+* Don’t complicate scoring yet; just show **facts** near each card.
+
+---
+
+# Anti-spam & fairness
+
+* **Floor = min_base_price** (enforced server-side).
+* **Block before pay:** When sender opens composer, check block list; if blocked, don’t offer payflow.
+* **One active bid per sender→recipient** (prevents “bid spamming”).
+* **Cooldown:** if declined, require +X% bid for next 24h.
+* **Refunds**: default refund on expire (SLA 24h). Make this explicit in UI.
+
+---
+
+# Optional smart defaults (make it feel great)
+
+* **Suggest-bid buttons:** min / median / “stand out” (= p75 or median×1.3).
+* **Auto-accept threshold (receiver setting):** `auto_accept_if_bid ≥ T` (off by default).
+  This gives power users hands-free intake without re-introducing complex availability rules.
+* **Topic tags:** lightweight tags (“hiring / fundraising / support”) that add a tiny **priority multiplier** in sort order for receiver, but do **not** change price mechanics.
+
+---
+
+# Step-by-step build order
+
+**Day 1 — Price guide & base price**
+
+* Add `recipients.min_base_usd`.
+* Implement `/price-guide` with pending-bids percentiles (winsorized).
+* Frontend: show the guide and quick-bid buttons.
+
+**Day 2 — Commit + escrow**
+
+* Implement `/messages/commit` with x402 **402→pay→retry**; store message as `pending` with `expires_at = now + SLA`.
+* Implement `GET /inbox/pending` for receiver.
+
+**Day 3 — Accept / decline / refund**
+
+* `/messages/accept`: settle escrow → `accepted`.
+* `/messages/decline`: refund → `declined`.
+* **Cron** to expire & refund after SLA.
+
+**Day 4 — Blocks & reputation facts**
+
+* `POST /blocks/create`; enforce at composer open & commit.
+* Compute daily simple facts; surface in UI chips (“Receiver accepts 62% · Median $0.11”).
+
+**Day 5 — Polish**
+
+* Sender withdraw (if still pending & not viewed).
+* Cooldown logic after decline.
+* Empty states & clear refund copy.
+
+**Day 6–7 — Optional**
+
+* Auto-accept threshold for high bids.
+* Topic tags with sort boost.
+* Farcaster Frame: show min base + median + “Bid & send”.
+
+---
+
+# Edge cases (cover these)
+
+* **Receiver goes offline:** everything just refunds on SLA; show “Avg acceptance time” in facts so senders bid wisely.
+* **Bid edits:** allow **withdraw→re-bid**; avoid direct edit to keep payment trail simple.
+* **Race conditions:** if two accept actions fire, lock the row (`FOR UPDATE`) so only one settles.
+
+---
+
+# Copy you can drop in
+
+**Composer hint:** “Most bids sit **${{p25}}–${{p75}}** (median **${{median}}**). Minimum **${{min}}**. You choose.”
+**Pending card (receiver):** “Bid **${{bid}}** • {{senderFact1}} • {{senderFact2}} • Expires in {{ttl}}”
+**Refund promise:** “Unaccepted in 24h? **Auto-refund.**”
+
+---
+
+This version keeps the market pure: **one knob** for receivers (min price), **one decision** for senders (their bid), and **one action** for receivers (accept). You still get all the benefits of x402 (instant, HTTP-native escrow/settle) and Self (unique human discount if you decide to add it later), without re-introducing availability math.
