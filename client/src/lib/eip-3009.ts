@@ -28,8 +28,9 @@ export interface PaymentAuthSignature {
 }
 
 // EIP-712 domain for USDC on Celo mainnet
+// CRITICAL: Celo's USDC uses "USDC" not "USD Coin" (different from Ethereum mainnet)
 export const USDC_CELO_DOMAIN = {
-  name: 'USD Coin',
+  name: 'USDC',
   version: '2',
   chainId: 42220,
   verifyingContract: '0xcebA9300f2b948710d2653dD7B07f33A8B32118C' as `0x${string}`,
