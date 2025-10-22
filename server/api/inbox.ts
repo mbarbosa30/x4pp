@@ -41,6 +41,9 @@ router.get("/:recipientId", async (req, res) => {
         capacity: recipient.slotsPerWindow,
         utilizationPct: Math.min(100, Math.round((queuedCount / recipient.slotsPerWindow) * 100)),
       },
+      recipientSettings: {
+        timeWindow: recipient.timeWindow,
+      },
     });
   } catch (error) {
     console.error("Error fetching inbox:", error);

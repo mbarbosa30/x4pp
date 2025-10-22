@@ -2,6 +2,9 @@ import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Mail, Inbox, Settings as SettingsIcon, Plus } from "lucide-react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import WalletConnectButton from "@/components/WalletConnectButton";
 import AttentionSlots from "@/components/AttentionSlots";
 import MessageCard from "@/components/MessageCard";
@@ -11,62 +14,35 @@ import SettingsPanel from "@/components/SettingsPanel";
 import VerificationModal from "@/components/VerificationModal";
 import PaymentModal from "@/components/PaymentModal";
 
-// TODO: Remove mock data
-const mockMessages = [
-  {
-    id: "1",
-    senderName: "Sarah Chen",
-    senderVerified: true,
-    messagePreview: "Hey! I'd love to collaborate on your latest project...",
-    message: "Hey! I'd love to collaborate on your latest project. I've been following your work for a while and think we could build something amazing together. Let me know if you're interested in chatting more about this.",
-    amount: 0.15,
-    timeRemaining: "2h 45m",
-    timestamp: "2 hours ago",
-    opened: false,
-    replyBounty: 0.05,
-    reputation: {
-      openRate: 0.78,
-      replyRate: 0.41,
-      vouchCount: 5,
-      totalSent: 24,
-    },
-  },
-  {
-    id: "2",
-    senderName: "Alex Rivera",
-    senderVerified: false,
-    messagePreview: "Quick question about your availability next week",
-    message: "Quick question about your availability next week. Would you be open to a consulting call?",
-    amount: 0.08,
-    timeRemaining: "5h 12m",
-    timestamp: "5 hours ago",
-    opened: false,
-    reputation: {
-      openRate: 0.52,
-      replyRate: 0.18,
-      vouchCount: 0,
-      totalSent: 8,
-    },
-  },
-  {
-    id: "3",
-    senderName: "David Park",
-    senderVerified: true,
-    messagePreview: "Invitation to speak at our upcoming conference",
-    message: "We'd like to invite you to speak at our upcoming blockchain conference in Miami. We're offering a $5k speaking fee plus travel.",
-    amount: 0.25,
-    timeRemaining: "1h 03m",
-    timestamp: "30 minutes ago",
-    opened: true,
-    replyBounty: 0.10,
-    reputation: {
-      openRate: 0.91,
-      replyRate: 0.67,
-      vouchCount: 12,
-      totalSent: 47,
-    },
-  },
-];
+// Helper to format time remaining
+function formatTimeRemaining(expiresAt: string): string {
+  const now = new Date();
+  const expiry = new Date(expiresAt);
+  const diffMs = expiry.getTime() - now.getTime();
+  
+  if (diffMs < 0) return "Expired";
+  
+  const hours = Math.floor(diffMs / (1000 * 60 * 60));
+  const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+  
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m`;
+}
+
+// Helper to format timestamp
+function formatTimestamp(dateStr: string): string {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  
+  const minutes = Math.floor(diffMs / (1000 * 60));
+  const hours = Math.floor(diffMs / (1000 * 60 * 60));
+  const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  
+  if (minutes < 60) return `${minutes} minutes ago`;
+  if (hours < 24) return `${hours} hours ago`;
+  return `${days} days ago`;
+}
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState("inbox");
@@ -76,6 +52,37 @@ export default function Home() {
   const [showPayment, setShowPayment] = useState(false);
   const [isVerified, setIsVerified] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState(0);
+  const { toast } = useToast();
+
+  // Fetch inbox data for current user (demo_recipient)
+  const recipientId = "demo_recipient";
+  const { data: inboxData, isLoading: isLoadingInbox } = useQuery({
+    queryKey: ["/api/inbox", recipientId],
+    enabled: activeTab === "inbox",
+  });
+
+  // Mutation to open a message
+  const openMessageMutation = useMutation({
+    mutationFn: async (messageId: string) => {
+      return await apiRequest(`/api/open/${messageId}`, {
+        method: "POST",
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/inbox"] });
+      toast({
+        title: "Message opened",
+        description: "Funds have been released to your wallet",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to open message",
+        description: error.message || "Please try again",
+        variant: "destructive",
+      });
+    },
+  });
 
   const handleComposeMessage = (recipient: string, message: string, bounty: number) => {
     console.log("Composing message:", { recipient, message, bounty });
@@ -84,40 +91,53 @@ export default function Home() {
     setShowCompose(false);
   };
 
-  const handleOpenMessage = (messageId: string) => {
+  const handleOpenMessage = async (messageId: string, isOpened: boolean) => {
+    // If message is not yet opened, call the open API
+    if (!isOpened) {
+      await openMessageMutation.mutateAsync(messageId);
+    }
     setSelectedMessage(messageId);
     setActiveTab("inbox");
   };
 
-  const handleVouch = async (messageId: string) => {
-    const msg = mockMessages.find((m) => m.id === messageId);
-    if (!msg) return;
-
+  const handleVouch = async (senderNullifier: string, messageId: string) => {
     try {
-      // TODO: Replace with actual nullifiers from wallet/Self verification
       const response = await fetch("/api/vouches", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          voucherNullifier: "current-user-nullifier", // Replace with actual
-          voucheeNullifier: `sender-${msg.senderName}`, // Replace with actual
+          voucherNullifier: "demo_recipient_001",
+          voucheeNullifier: senderNullifier,
           messageId: messageId,
         }),
       });
 
       if (!response.ok) {
         const error = await response.json();
-        console.error("Vouch failed:", error);
+        toast({
+          title: "Vouch failed",
+          description: error.error || "Please try again",
+          variant: "destructive",
+        });
         return;
       }
 
-      console.log("Successfully vouched for", msg.senderName);
+      toast({
+        title: "Vouch sent",
+        description: "You vouched for this sender",
+      });
     } catch (error) {
       console.error("Error vouching:", error);
+      toast({
+        title: "Error",
+        description: "Failed to vouch for sender",
+        variant: "destructive",
+      });
     }
   };
 
-  const message = mockMessages.find((m) => m.id === selectedMessage);
+  // Find selected message from inbox data
+  const message = inboxData?.messages?.find((m: any) => m.id === selectedMessage);
 
   return (
     <div className="min-h-screen bg-background">
@@ -165,7 +185,11 @@ export default function Home() {
             {/* Inbox Tab */}
             <TabsContent value="inbox" className="space-y-3 md:space-y-4 mt-0">
               <div className="overflow-x-auto -mx-3 px-3 md:mx-0 md:px-0">
-                <AttentionSlots totalSlots={5} usedSlots={3} timeWindow="hour" />
+                <AttentionSlots 
+                  totalSlots={inboxData?.queueStatus?.capacity || 5} 
+                  usedSlots={inboxData?.queueStatus?.queued || 0} 
+                  timeWindow={inboxData?.recipientSettings?.timeWindow || "hour"} 
+                />
               </div>
 
               {selectedMessage && message ? (
@@ -180,27 +204,46 @@ export default function Home() {
                   </Button>
                   <MessageDetail
                     senderName={message.senderName}
-                    senderVerified={message.senderVerified}
-                    message={message.message}
-                    amount={message.amount}
-                    timestamp={message.timestamp}
-                    replyBounty={message.replyBounty}
+                    senderVerified={message.senderVerified || false}
+                    message={message.content}
+                    amount={parseFloat(message.amount)}
+                    timestamp={formatTimestamp(message.sentAt)}
+                    replyBounty={message.replyBounty ? parseFloat(message.replyBounty) : undefined}
                     reputation={message.reputation}
                     onReply={(reply) => console.log("Reply:", reply)}
-                    onVouch={() => handleVouch(message.id)}
+                    onVouch={() => handleVouch(message.senderNullifier, message.id)}
                     onBlock={() => console.log("Block sender")}
                     onReport={() => console.log("Report message")}
                   />
                 </div>
-              ) : (
+              ) : isLoadingInbox ? (
+                <div className="text-center py-8 text-muted-foreground" data-testid="text-loading">
+                  Loading inbox...
+                </div>
+              ) : inboxData?.messages && inboxData.messages.length > 0 ? (
                 <div className="space-y-2 md:space-y-3">
-                  {mockMessages.map((msg) => (
+                  <div className="text-xs text-muted-foreground mb-2 px-1" data-testid="text-queue-info">
+                    Showing top {inboxData.messages.length} of {inboxData.queueStatus?.queued || 0} queued messages
+                  </div>
+                  {inboxData.messages.map((msg: any, index: number) => (
                     <MessageCard
                       key={msg.id}
-                      {...msg}
-                      onClick={() => handleOpenMessage(msg.id)}
+                      id={msg.id}
+                      senderName={msg.senderName}
+                      senderVerified={msg.senderVerified || false}
+                      messagePreview={msg.content.substring(0, 60) + (msg.content.length > 60 ? "..." : "")}
+                      amount={parseFloat(msg.amount)}
+                      timeRemaining={formatTimeRemaining(msg.expiresAt)}
+                      opened={!!msg.openedAt}
+                      queuePosition={index + 1}
+                      reputation={msg.reputation}
+                      onClick={() => handleOpenMessage(msg.id, !!msg.openedAt)}
                     />
                   ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground" data-testid="text-no-messages">
+                  No messages in your inbox
                 </div>
               )}
             </TabsContent>

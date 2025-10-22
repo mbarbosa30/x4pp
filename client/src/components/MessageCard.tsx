@@ -15,6 +15,7 @@ interface MessageCardProps {
   timeRemaining: string;
   opened: boolean;
   onClick?: () => void;
+  queuePosition?: number;
   reputation?: {
     openRate?: number;
     replyRate?: number;
@@ -32,12 +33,23 @@ export default function MessageCard({
   timeRemaining,
   opened,
   onClick,
+  queuePosition,
   reputation,
 }: MessageCardProps) {
   const [isHovered, setIsHovered] = useState(false);
 
   const getInitials = (name: string) => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+  };
+
+  const getPositionSuffix = (position: number) => {
+    const lastDigit = position % 10;
+    const lastTwoDigits = position % 100;
+    if (lastTwoDigits >= 11 && lastTwoDigits <= 13) return "th";
+    if (lastDigit === 1) return "st";
+    if (lastDigit === 2) return "nd";
+    if (lastDigit === 3) return "rd";
+    return "th";
   };
 
   return (
@@ -87,6 +99,11 @@ export default function MessageCard({
 
         {/* Amount and time on mobile as second row, desktop as right column */}
         <div className="flex items-center justify-between sm:flex-col sm:items-end gap-2 sm:flex-shrink-0">
+          {queuePosition !== undefined && !opened && (
+            <Badge variant="default" className="text-xs whitespace-nowrap" data-testid={`text-queue-position-${id}`}>
+              #{queuePosition}{getPositionSuffix(queuePosition)}
+            </Badge>
+          )}
           <Badge variant="outline" className="bg-price/10 border-price/20 text-price font-semibold text-xs sm:text-sm" data-testid="badge-amount">
             <DollarSign className="h-3 w-3 mr-0.5" />
             {amount.toFixed(2)}
