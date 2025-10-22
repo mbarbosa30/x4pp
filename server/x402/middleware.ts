@@ -63,7 +63,8 @@ export function generatePaymentRequirements(
 
   const nonce = uuidv4();
   const expiration = Math.floor(Date.now() / 1000) + expirationMinutes * 60;
-  const amountUSDC = formatUSDC(priceUSD);
+  // Convert USD to smallest units (0.01 USD = 10000 in 6 decimal token units)
+  const amountInSmallestUnits = Math.floor(priceUSD * 1_000_000).toString();
 
   return {
     x402Version: X402_CONFIG.version,
@@ -79,7 +80,7 @@ export function generatePaymentRequirements(
           symbol: "USDC",
           decimals: CELO_CONFIG.decimals,
         },
-        amount: amountUSDC,
+        amount: amountInSmallestUnits,
         recipient: recipientWalletAddress,
         nonce,
         expiration,
