@@ -19,7 +19,7 @@ const router = Router();
  */
 router.post("/", async (req, res) => {
   try {
-    const { recipientUsername, content, senderNullifier, senderName, senderEmail, replyBounty, bidUsd } = req.body;
+    const { recipientUsername, content, senderNullifier, senderName, senderEmail, replyBounty, bidUsd, expirationHours } = req.body;
 
     if (!recipientUsername || !content || !senderName || !bidUsd) {
       return res.status(400).json({ 
@@ -31,6 +31,14 @@ router.post("/", async (req, res) => {
     if (isNaN(bidAmount) || bidAmount <= 0) {
       return res.status(400).json({ 
         error: "bidUsd must be a positive number" 
+      });
+    }
+
+    // Validate expiration hours (default to 24 hours if not provided)
+    const expirationHrs = expirationHours ? parseFloat(expirationHours) : 24;
+    if (isNaN(expirationHrs) || expirationHrs < 1 || expirationHrs > 168) {
+      return res.status(400).json({ 
+        error: "expirationHours must be between 1 and 168 hours (7 days)" 
       });
     }
 
@@ -164,7 +172,8 @@ router.post("/", async (req, res) => {
 
     // Payment verified - create PENDING message (not auto-accepted in open bidding model)
     const finalSenderNullifier = senderNullifier || `anon_${Date.now()}`;
-    const expiresAt = new Date(Date.now() + (recipient.slaHours * 60 * 60 * 1000));
+    // Use sender's expiration time (not recipient's SLA)
+    const expiresAt = new Date(Date.now() + (expirationHrs * 60 * 60 * 1000));
 
     const [newMessage] = await db
       .insert(messages)
