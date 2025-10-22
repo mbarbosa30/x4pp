@@ -177,14 +177,15 @@ export default function ComposeMessage({ isVerified, onSend }: ComposeMessagePro
 
     try {
       // Step 2: Sign EIP-712 payment authorization with real wallet
-      const amountInSmallestUnit = BigInt(Math.round(parseFloat(paymentRequirements.amount) * 1e6)); // USDC has 6 decimals
+      // paymentRequirements.amount is already in smallest unit from backend
+      const amountInSmallestUnit = BigInt(paymentRequirements.amount);
       
       const authParams = {
         from: walletAddress as `0x${string}`,
         to: paymentRequirements.recipient as `0x${string}`,
         value: amountInSmallestUnit,
         validAfter: BigInt(0), // Valid immediately
-        validBefore: BigInt(paymentRequirements.expiration),
+        validBefore: BigInt(paymentRequirements.validUntil),
         nonce: paymentRequirements.nonce as `0x${string}`, // Backend now generates bytes32 nonces
       };
 
@@ -202,12 +203,12 @@ export default function ComposeMessage({ isVerified, onSend }: ComposeMessagePro
       // Create payment proof
       const paymentProof = {
         chainId: paymentRequirements.network.chainId,
-        tokenAddress: paymentRequirements.asset.address,
+        tokenAddress: paymentRequirements.token.address,
         amount: paymentRequirements.amount,
         sender: walletAddress,
         recipient: paymentRequirements.recipient,
         nonce: paymentRequirements.nonce, // Already in bytes32 format from backend
-        expiration: paymentRequirements.expiration,
+        expiration: paymentRequirements.validUntil,
         signature: signatureHex, // Full signature for reference
         v: parsedSig.v,
         r: parsedSig.r,
