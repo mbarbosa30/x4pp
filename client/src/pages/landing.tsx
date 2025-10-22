@@ -48,8 +48,8 @@ export default function Landing() {
             Get paid for your attention
           </h1>
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-            A p2p messaging platform where senders pay for your time. 
-            Set your price, prove you're human, and get refunds for unopened messages.
+            A peer-to-peer messaging app where senders bid for your time. 
+            Set your minimum price, accept the bids you want, and receive USDC directly.
           </p>
           
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-6">
