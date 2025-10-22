@@ -70,6 +70,14 @@ router.post("/login", async (req, res) => {
     req.session.userId = user.id;
     req.session.username = user.username;
 
+    // Save session before responding
+    await new Promise<void>((resolve, reject) => {
+      req.session.save((err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+
     res.json({ user });
   } catch (error) {
     console.error("Error logging in:", error);

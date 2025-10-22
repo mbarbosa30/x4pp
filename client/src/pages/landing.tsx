@@ -1,4 +1,5 @@
-import { Link } from "wouter";
+import { useEffect, useRef } from "react";
+import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -15,8 +16,71 @@ import {
 } from "lucide-react";
 import { SiGithub } from "react-icons/si";
 import ThemeToggle from "@/components/ThemeToggle";
+import { useWallet } from "@/providers/WalletProvider";
+import { useToast } from "@/hooks/use-toast";
+import { useMutation } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 
 export default function Landing() {
+  const { address: walletAddress, isConnected, connect } = useWallet();
+  const [, setLocation] = useLocation();
+  const { toast } = useToast();
+  const hasCheckedRef = useRef(false);
+
+  const checkProfileMutation = useMutation({
+    mutationFn: async (address: string) => {
+      const response = await apiRequest("POST", "/api/auth/login", { walletAddress: address });
+      return await response.json();
+    },
+    onSuccess: (data) => {
+      // User has a profile, redirect to dashboard
+      toast({
+        title: "Welcome back!",
+        description: `Logged in as @${data.user.username}`,
+      });
+      setLocation("/app");
+    },
+    onError: () => {
+      // User doesn't have a profile, redirect to registration
+      toast({
+        title: "No account found",
+        description: "Let's create your profile",
+      });
+      setLocation("/register");
+    },
+  });
+
+  // Watch for wallet connection and check profile after a delay
+  useEffect(() => {
+    if (isConnected && walletAddress && !hasCheckedRef.current) {
+      // Wait for WalletProvider's auto-login to complete
+      // If it succeeds, page will reload. If not, we check manually
+      const timer = setTimeout(() => {
+        checkProfileMutation.mutate(walletAddress);
+        hasCheckedRef.current = true;
+      }, 1500);
+
+      return () => clearTimeout(timer);
+    }
+  }, [isConnected, walletAddress]);
+
+  const handleConnect = async () => {
+    if (isConnected && walletAddress) {
+      // Already connected, check for profile immediately
+      checkProfileMutation.mutate(walletAddress);
+    } else {
+      // Connect wallet first - the useEffect will handle profile check
+      try {
+        await connect();
+      } catch (error) {
+        toast({
+          title: "Connection failed",
+          description: "Failed to connect wallet",
+          variant: "destructive",
+        });
+      }
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -29,11 +93,15 @@ export default function Landing() {
           </div>
           <div className="flex items-center gap-3">
             <ThemeToggle />
-            <Link href="/register">
-              <Button variant="outline" data-testid="button-login">
-                Sign In
-              </Button>
-            </Link>
+            <Button 
+              variant="outline" 
+              data-testid="button-connect"
+              onClick={handleConnect}
+              disabled={checkProfileMutation.isPending}
+            >
+              <Wallet className="h-4 w-4 mr-2" />
+              {checkProfileMutation.isPending ? "Connecting..." : "Connect"}
+            </Button>
           </div>
         </div>
       </header>
