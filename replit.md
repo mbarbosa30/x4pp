@@ -30,6 +30,12 @@ The PostgreSQL database schema includes tables for:
 
 Payment architecture uses EIP-3009 `transferWithAuthorization` for gasless USDC transfers on Celo mainnet, with server-side validation of EIP-712 signatures. Data privacy is maintained through the use of Self nullifiers and aggregation of metrics, avoiding storage of PII.
 
+**Token Configuration:**
+- **USDC Token ID**: `60481d40-b8ce-41d9-8ced-32aee91a04ea`
+- **USDC Contract Address**: `0xcebA9300f2b948710d2653dD7B07f33A8B32118C` (Circle's official native USDC on Celo mainnet)
+- **Chain ID**: 42220 (Celo mainnet)
+- **Decimals**: 6
+
 ### Authentication and Authorization
 
 The system implements **session-based authentication** using `express-session` with a PostgreSQL store for persistent user sessions. **Reown AppKit** provides a professional WalletConnect v2 integration for seamless wallet connection and auto-login/logout. The **HTTP 402 payment protocol** is used for message sending, and **Celo blockchain integration** via wagmi handles on-chain interactions and EIP-712 payment signature generation.
