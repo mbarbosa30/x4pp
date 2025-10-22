@@ -30,8 +30,8 @@ router.post("/", async (req, res) => {
       return res.status(404).json({ error: "Recipient not found" });
     }
 
-    // Get current queue count
-    const queuedMessages = await getQueuedMessageCount(recipient.selfNullifier || recipientId);
+    // Get current queue count (use recipient.id for consistent tracking)
+    const queuedMessages = await getQueuedMessageCount(recipient.selfNullifier || recipient.id);
 
     // Check if sender is verified human (simplified - in production, validate selfProof)
     const isHuman = !!selfProof;

@@ -4,8 +4,9 @@ import { eq, and, gte, lte, desc } from "drizzle-orm";
 
 /**
  * Get current queue count for a recipient within their time window
+ * Uses recipient ID (not nullifier or username) to match how messages are stored
  */
-export async function getQueuedMessageCount(recipientNullifier: string): Promise<number> {
+export async function getQueuedMessageCount(recipientId: string): Promise<number> {
   const now = new Date();
   const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
 
@@ -14,7 +15,7 @@ export async function getQueuedMessageCount(recipientNullifier: string): Promise
     .from(messages)
     .where(
       and(
-        eq(messages.recipientNullifier, recipientNullifier),
+        eq(messages.recipientNullifier, recipientId),
         eq(messages.status, "pending"),
         gte(messages.sentAt, oneHourAgo)
       )

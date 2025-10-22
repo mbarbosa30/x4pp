@@ -43,11 +43,20 @@ router.post("/", async (req, res) => {
       });
     }
 
-    // Calculate price
-    const queuedMessages = await getQueuedMessageCount(recipient.selfNullifier || recipientId);
+    // Calculate price (use recipient.id for consistent queue tracking)
+    const recipientIdentifier = recipient.selfNullifier || recipient.id;
+    const queuedMessages = await getQueuedMessageCount(recipientIdentifier);
     const isHuman = !!selfProof;
     const quote = calculatePriceForUser(recipient, queuedMessages, isHuman);
     const amountUSD = parseFloat(quote.priceUSD);
+    
+    // Check slot capacity before accepting payment
+    if (queuedMessages >= recipient.slotsPerWindow) {
+      return res.status(503).json({
+        error: "Recipient inbox is full",
+        message: `All ${recipient.slotsPerWindow} attention slots are currently occupied. Try again later.`
+      });
+    }
 
     // Check for payment header
     const paymentHeader = req.headers['x-payment'] as string;
@@ -84,12 +93,25 @@ router.post("/", async (req, res) => {
     const paymentValid = await verifyPayment(paymentProof, amountUSD);
 
     if (!paymentValid) {
+      // Return 402 with PaymentRequirements for retry (x402 protocol compliance)
+      const nonce = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
       return res.status(402).json({ 
-        error: "Payment verification failed"
+        error: "Payment verification failed",
+        paymentRequirements: {
+          amount: amountUSD.toFixed(2),
+          currency: "USDC",
+          chainId: 42220,
+          tokenAddress: process.env.USDC_ADDRESS || "0x765DE816845861e75A25fCA122bb6898B8B1282a",
+          payee: recipient.walletAddress,
+          nonce,
+          facilitatorUrl: process.env.FACILITATOR_URL || "https://facilitator.x402.org",
+          memo: `Message to ${recipient.displayName}`,
+        }
       });
     }
 
-    // Payment verified - create message
+    // Payment verified - create message with consistent recipient identifier
     const senderNullifier = selfProof || `anon_${Date.now()}`;
     const expiresAt = new Date(Date.now() + (recipient.slaHours * 60 * 60 * 1000));
 
@@ -97,7 +119,7 @@ router.post("/", async (req, res) => {
       .insert(messages)
       .values({
         senderNullifier,
-        recipientNullifier: recipient.selfNullifier || recipient.id,
+        recipientNullifier: recipientIdentifier, // Use same identifier as queue counting
         senderName,
         senderEmail: senderEmail || null,
         content: messageContent,
