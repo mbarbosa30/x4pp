@@ -44,7 +44,7 @@ export default function ComposeMessage({ isVerified, onSend }: ComposeMessagePro
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             recipientUsername: recipient,
-            senderNullifier: isVerified ? "verified_sender" : "unverified_sender",
+            senderNullifier: isVerified ? "demo_verified_user_001" : undefined,
           }),
         });
 
@@ -84,9 +84,11 @@ export default function ComposeMessage({ isVerified, onSend }: ComposeMessagePro
 
     try {
       // Step 1: Generate and persist commit payload (so retry uses same data)
+      // Note: In production, senderNullifier should come from Self Protocol verification
+      // For MVP demo, use a consistent nullifier pattern
       const commitRequest = {
         recipientUsername: recipient,
-        senderNullifier: "sender_demo_" + Math.random().toString(36).substr(2, 9),
+        senderNullifier: isVerified ? "demo_verified_user_001" : undefined,
         senderName: "Demo Sender",
         content: message,
         replyBounty: includeReplyBounty ? replyBounty : undefined,
@@ -95,7 +97,7 @@ export default function ComposeMessage({ isVerified, onSend }: ComposeMessagePro
       // Save the payload for potential retry after payment
       setOriginalCommitPayload(commitRequest);
 
-      const response = await fetch("/api/x402/commit", {
+      const response = await fetch("/api/commit", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -175,7 +177,7 @@ export default function ComposeMessage({ isVerified, onSend }: ComposeMessagePro
 
       // Step 3: Retry commit with SAME payload and payment proof
       // CRITICAL: Must use originalCommitPayload, not generate new one
-      const response = await fetch("/api/x402/commit", {
+      const response = await fetch("/api/commit", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

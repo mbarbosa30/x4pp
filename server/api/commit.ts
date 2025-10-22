@@ -18,11 +18,11 @@ const router = Router();
  */
 router.post("/", async (req, res) => {
   try {
-    const { recipientId, message: messageContent, senderName, senderEmail, selfProof, replyBounty } = req.body;
+    const { recipientUsername, content, senderNullifier, senderName, senderEmail, replyBounty } = req.body;
 
-    if (!recipientId || !messageContent || !senderName) {
+    if (!recipientUsername || !content || !senderName) {
       return res.status(400).json({ 
-        error: "recipientId, message, and senderName are required" 
+        error: "recipientUsername, content, and senderName are required" 
       });
     }
 
@@ -30,7 +30,7 @@ router.post("/", async (req, res) => {
     const [recipient] = await db
       .select()
       .from(users)
-      .where(eq(users.username, recipientId))
+      .where(eq(users.username, recipientUsername))
       .limit(1);
 
     if (!recipient) {
@@ -46,7 +46,18 @@ router.post("/", async (req, res) => {
     // Calculate price (use recipient.id for consistent queue tracking)
     const recipientIdentifier = recipient.selfNullifier || recipient.id;
     const queuedMessages = await getQueuedMessageCount(recipientIdentifier);
-    const isHuman = !!selfProof;
+    
+    // Check if sender is verified human
+    let isHuman = false;
+    if (senderNullifier) {
+      const [sender] = await db
+        .select()
+        .from(users)
+        .where(eq(users.selfNullifier, senderNullifier))
+        .limit(1);
+      isHuman = sender?.verified || false;
+    }
+    
     const quote = calculatePriceForUser(recipient, queuedMessages, isHuman);
     const amountUSD = parseFloat(quote.priceUSD);
     
@@ -78,7 +89,23 @@ router.post("/", async (req, res) => {
 
       return res.status(402).json({
         error: "Payment required",
-        paymentRequirements,
+        paymentRequirements: [{
+          amount: paymentRequirements.amount,
+          network: {
+            chainId: paymentRequirements.chainId,
+          },
+          asset: {
+            address: paymentRequirements.tokenAddress,
+            symbol: paymentRequirements.currency,
+          },
+          recipient: paymentRequirements.payee,
+          nonce: paymentRequirements.nonce,
+          expiration: Date.now() + 15 * 60 * 1000, // 15 minutes
+        }],
+        quote: {
+          priceUSD: amountUSD,
+          priceUSDC: amountUSD.toFixed(6),
+        },
       });
     }
 
@@ -98,31 +125,38 @@ router.post("/", async (req, res) => {
       
       return res.status(402).json({ 
         error: "Payment verification failed",
-        paymentRequirements: {
+        paymentRequirements: [{
           amount: amountUSD.toFixed(2),
-          currency: "USDC",
-          chainId: 42220,
-          tokenAddress: process.env.USDC_ADDRESS || "0x765DE816845861e75A25fCA122bb6898B8B1282a",
-          payee: recipient.walletAddress,
+          network: {
+            chainId: 42220,
+          },
+          asset: {
+            address: process.env.USDC_ADDRESS || "0x765DE816845861e75A25fCA122bb6898B8B1282a",
+            symbol: "USDC",
+          },
+          recipient: recipient.walletAddress,
           nonce,
-          facilitatorUrl: process.env.FACILITATOR_URL || "https://facilitator.x402.org",
-          memo: `Message to ${recipient.displayName}`,
-        }
+          expiration: Date.now() + 15 * 60 * 1000,
+        }],
+        quote: {
+          priceUSD: amountUSD,
+          priceUSDC: amountUSD.toFixed(6),
+        },
       });
     }
 
     // Payment verified - create message with consistent recipient identifier
-    const senderNullifier = selfProof || `anon_${Date.now()}`;
+    const finalSenderNullifier = senderNullifier || `anon_${Date.now()}`;
     const expiresAt = new Date(Date.now() + (recipient.slaHours * 60 * 60 * 1000));
 
     const [newMessage] = await db
       .insert(messages)
       .values({
-        senderNullifier,
+        senderNullifier: finalSenderNullifier,
         recipientNullifier: recipientIdentifier, // Use same identifier as queue counting
         senderName,
         senderEmail: senderEmail || null,
-        content: messageContent,
+        content,
         amount: amountUSD.toFixed(2),
         replyBounty: replyBounty ? parseFloat(replyBounty).toFixed(2) : null,
         status: "pending",
@@ -149,7 +183,7 @@ router.post("/", async (req, res) => {
     await enqueueMessage(newMessage.id, recipientIdentifier, amountUSD, expiresAt);
 
     // Log reputation event
-    await logReputationEvent(senderNullifier, "sent", newMessage.id);
+    await logReputationEvent(finalSenderNullifier, "sent", newMessage.id);
 
     res.status(200).json({
       messageId: newMessage.id,

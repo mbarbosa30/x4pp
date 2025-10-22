@@ -33,9 +33,18 @@ router.post("/", async (req, res) => {
     // Get current queue count (use recipient.id for consistent tracking)
     const queuedMessages = await getQueuedMessageCount(recipient.selfNullifier || recipient.id);
 
-    // Check if sender is verified human (in MVP, check if nullifier indicates verification)
-    // In production, validate actual Self proof
-    const isHuman = senderNullifier && senderNullifier.includes("verified");
+    // Check if sender is verified human
+    // MVP: Check if user exists in database with verified flag
+    // Production: Validate actual Self proof
+    let isHuman = false;
+    if (senderNullifier) {
+      const [sender] = await db
+        .select()
+        .from(users)
+        .where(eq(users.selfNullifier, senderNullifier))
+        .limit(1);
+      isHuman = sender?.verified || false;
+    }
 
     // Calculate price
     const quote = calculatePriceForUser(recipient, queuedMessages, isHuman);
