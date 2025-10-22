@@ -62,7 +62,7 @@ router.get("/:username", async (req, res) => {
     const [reputation] = await db
       .select()
       .from(reputationScores)
-      .where(eq(reputationScores.nullifier, user.walletAddress.toLowerCase()))
+      .where(eq(reputationScores.walletAddress, user.walletAddress.toLowerCase()))
       .limit(1);
 
     res.json({

@@ -62,16 +62,19 @@ interface ReputationMetrics {
   totalReceived: number;
 }
 
-export async function computeReputationScore(nullifier: string): Promise<ReputationMetrics> {
+export async function computeReputationScore(walletAddress: string): Promise<ReputationMetrics> {
   const cutoffDate = new Date();
   cutoffDate.setDate(cutoffDate.getDate() - 90);
+
+  // Normalize wallet address to lowercase
+  const normalizedWallet = walletAddress.toLowerCase();
 
   // Get messages sent by this user
   const sentMessages = await db
     .select()
     .from(messages)
     .where(and(
-      eq(messages.senderNullifier, nullifier),
+      eq(messages.senderWallet, normalizedWallet),
       gte(messages.sentAt, cutoffDate)
     ));
 
@@ -80,7 +83,7 @@ export async function computeReputationScore(nullifier: string): Promise<Reputat
     .select()
     .from(messages)
     .where(and(
-      eq(messages.recipientNullifier, nullifier),
+      eq(messages.recipientWallet, normalizedWallet),
       gte(messages.sentAt, cutoffDate)
     ));
 
@@ -117,7 +120,7 @@ export async function computeReputationScore(nullifier: string): Promise<Reputat
     .select()
     .from(blocks)
     .where(and(
-      eq(blocks.blockedNullifier, nullifier),
+      eq(blocks.blockedWallet, normalizedWallet),
       gte(blocks.createdAt, cutoffDate)
     ));
 
@@ -129,7 +132,7 @@ export async function computeReputationScore(nullifier: string): Promise<Reputat
     .select()
     .from(vouches)
     .where(and(
-      eq(vouches.voucheeNullifier, nullifier),
+      eq(vouches.voucheeWallet, normalizedWallet),
       gte(vouches.createdAt, cutoffDate)
     ));
 
@@ -175,13 +178,14 @@ export async function computeReputationScore(nullifier: string): Promise<Reputat
   };
 }
 
-export async function updateReputationScore(nullifier: string): Promise<void> {
-  const metrics = await computeReputationScore(nullifier);
+export async function updateReputationScore(walletAddress: string): Promise<void> {
+  const normalizedWallet = walletAddress.toLowerCase();
+  const metrics = await computeReputationScore(normalizedWallet);
 
   const existing = await db
     .select()
     .from(reputationScores)
-    .where(eq(reputationScores.nullifier, nullifier));
+    .where(eq(reputationScores.walletAddress, normalizedWallet));
 
   if (existing.length > 0) {
     await db
@@ -198,10 +202,10 @@ export async function updateReputationScore(nullifier: string): Promise<void> {
         totalReceived: metrics.totalReceived,
         updatedAt: new Date(),
       })
-      .where(eq(reputationScores.nullifier, nullifier));
+      .where(eq(reputationScores.walletAddress, normalizedWallet));
   } else {
     await db.insert(reputationScores).values({
-      nullifier,
+      walletAddress: normalizedWallet,
       senderScore: metrics.senderScore.toString(),
       recipientScore: metrics.recipientScore.toString(),
       openRate: metrics.openRate.toString(),
@@ -216,18 +220,19 @@ export async function updateReputationScore(nullifier: string): Promise<void> {
 }
 
 export async function logReputationEvent(
-  nullifier: string,
+  walletAddress: string,
   eventType: string,
   relatedMessageId?: string,
   metadata?: Record<string, any>
 ): Promise<void> {
+  const normalizedWallet = walletAddress.toLowerCase();
   await db.insert(reputationEvents).values({
-    nullifier,
+    walletAddress: normalizedWallet,
     eventType,
     relatedMessageId,
     metadata: metadata ? JSON.stringify(metadata) : null,
   });
 
   // Update reputation score after logging event
-  await updateReputationScore(nullifier);
+  await updateReputationScore(normalizedWallet);
 }

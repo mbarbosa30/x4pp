@@ -3,6 +3,7 @@ import { getAccount, watchAccount, disconnect } from '@wagmi/core';
 import { wagmiConfig, modal } from "@/lib/reown-config";
 import { queryClient } from "@/lib/queryClient";
 import { useLocation } from "wouter";
+import { useToast } from "@/hooks/use-toast";
 
 interface WalletContextType {
   address: string | undefined;
@@ -19,6 +20,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
 
   useEffect(() => {
     // Initialize account state
@@ -72,8 +74,18 @@ export function WalletProvider({ children }: { children: ReactNode }) {
                 // Navigate to dashboard (no page reload)
                 setLocation('/app');
               } else {
-                // User not registered, stay on current page
+                // User not registered - show prompt and redirect to registration
                 console.log('No account found for this wallet');
+                toast({
+                  title: "Account Not Found",
+                  description: "Please register to start using x4pp",
+                  variant: "default",
+                });
+                
+                // Redirect to registration page after a short delay
+                setTimeout(() => {
+                  setLocation('/register');
+                }, 1500);
               }
             } catch (loginError) {
               console.log('Auto-login failed:', loginError);

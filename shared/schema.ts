@@ -52,7 +52,7 @@ export const messages = pgTable("messages", {
 
 export const reputationEvents = pgTable("reputation_events", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  nullifier: text("nullifier").notNull(),
+  walletAddress: text("wallet_address").notNull(), // User's wallet address
   eventType: text("event_type").notNull(), // sent, delivered, opened, replied, refunded, blocked, vouched
   relatedMessageId: varchar("related_message_id"),
   metadata: text("metadata"), // JSON string for additional data
@@ -61,8 +61,8 @@ export const reputationEvents = pgTable("reputation_events", {
 
 export const vouches = pgTable("vouches", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  voucherNullifier: text("voucher_nullifier").notNull(),
-  voucheeNullifier: text("vouchee_nullifier").notNull(),
+  voucherWallet: text("voucher_wallet").notNull(), // Wallet of person giving vouch
+  voucheeWallet: text("vouchee_wallet").notNull(), // Wallet of person receiving vouch
   weight: decimal("weight", { precision: 4, scale: 2 }).notNull().default("1.0"),
   messageId: varchar("message_id"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -70,14 +70,14 @@ export const vouches = pgTable("vouches", {
 
 export const blocks = pgTable("blocks", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  blockerNullifier: text("blocker_nullifier").notNull(),
-  blockedNullifier: text("blocked_nullifier").notNull(),
+  blockerWallet: text("blocker_wallet").notNull(), // Wallet of person blocking
+  blockedWallet: text("blocked_wallet").notNull(), // Wallet of person being blocked
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
 export const reputationScores = pgTable("reputation_scores", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  nullifier: text("nullifier").notNull().unique(),
+  walletAddress: text("wallet_address").notNull().unique(), // User's wallet address
   senderScore: decimal("sender_score", { precision: 5, scale: 2 }),
   recipientScore: decimal("recipient_score", { precision: 5, scale: 2 }),
   openRate: decimal("open_rate", { precision: 5, scale: 4 }),
