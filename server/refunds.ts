@@ -62,7 +62,8 @@ async function processRefund(messageId: string, reason: string): Promise<void> {
       return;
     }
 
-    if (payment.status !== "pending") {
+    // Check if payment can be refunded (should be settled, not already refunded/failed)
+    if (payment.status === "refunded" || payment.status === "failed") {
       console.log(`[Refunds] Payment already ${payment.status} for message ${messageId}`);
       return;
     }

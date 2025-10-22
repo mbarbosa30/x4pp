@@ -1,0 +1,225 @@
+Great—your current flow (sender signs an EIP-3009 authorization; money only moves if the receiver opens before the deadline) already matches what x402 folks are formalizing as a **“deferred”** payment scheme: a signed, off-chain IOU you can redeem later if/when conditions are met. That PR proposes standardizing verify/settle for these “vouchers,” rather than forcing immediate on-chain settlement. ([GitHub][1])
+
+Below is exactly how to bolt this into **x4pp** using your **Self-x402 Facilitator** and patterns from the **x402 deferred** spec—without changing your open-bidding UX.
+
+---
+
+# What we’re building
+
+* Keep your **402 → sign typed data → retry** loop the same.
+* On the **second call** (with `X-PAYMENT`), **do not execute** on-chain.
+* Instead, **store the EIP-3009 authorization** (the “voucher”) and mark the message `pending`.
+* When the receiver **opens/accepts**, you **settle** the exact authorization on-chain.
+* If they **decline/expire**, you mark the authorization **unused**—no refund tx needed (funds never left).
+
+This is a *trust-minimized*, gas-efficient escrow: the **authorization itself is the escrow**.
+
+---
+
+# How to wire it (step-by-step)
+
+## 1) Add a “deferred” scheme to your Self-x402 Facilitator
+
+Your facilitator already speaks “x402 style” (verify input, then settle). Extend it with two phases:
+
+1. **Verify + Store** (on `X-PAYMENT`): Parse & verify the EIP-712 signature off-chain and store the full EIP-3009 payload (from, to, value, validAfter, validBefore, nonce, v, r, s) with a status `authorized`.
+2. **Settle** (on accept): Replay the **exact** stored fields into `USDC.transferWithAuthorization(...)`. Mark used.
+
+You can mirror the endpoint names from the x402 deferred spec idea (“verify” vs “settle”; an optional “voucher store”), but you don’t *have* to implement facilitator-side storage if you prefer to store in **your app DB** (the PR explicitly allows either facilitator or server storage). ([GitHub][1])
+
+### Minimal facilitator endpoints
+
+* `POST /deferred/verify`
+  Input: `{from,to,value,validAfter,validBefore,nonce,v,r,s, chainId, token}`
+  Actions:
+
+  * Validate domain/type (USD Coin v2, chainId 42220).
+  * Recover signer == `from`.
+  * Check `validAfter <= now < validBefore`.
+  * *(optional)* Check `authorizationState(from, nonce) == Unused`.
+  * Return `{ok:true, authorizationId}`.
+
+* `POST /deferred/settle`
+  Input: `{authorizationId}` (or the full payload if you keep facilitator stateless).
+  Actions:
+
+  * Call `transferWithAuthorization(from,to,value,validAfter,validBefore,nonce,v,r,s)`.
+  * Record `txHash`; return `{ok:true, txHash}`.
+
+*(If you prefer **server-side storage** like the x402 review suggests, you can keep `/deferred/verify` stateless and only perform full storage in your app DB. Then call `/deferred/settle` with the full payload.)* ([GitHub][1])
+
+---
+
+## 2) App API changes (Express)
+
+These line up with your current routes—just be explicit about “deferred”.
+
+**A) Commit (first call): 402 response**
+
+```
+POST /api/commit
+→ 402 Payment Required
+  {
+    scheme: "deferred",
+    token: "USDC",
+    chainId: 42220,
+    verifyingContract: CELO_USDC,
+    to: <recipient.wallet>,
+    value: <micros>,
+    validAfter: now or 0,
+    validBefore: now + SLA,
+    nonce: 32B random hex,
+    typedDataDomain, typedDataTypes  // for the wallet to sign
+  }
+```
+
+**B) Commit (second call with X-PAYMENT)**
+
+* Parse `X-PAYMENT` → `{from,to,value,validAfter,validBefore,nonce,v,r,s}`.
+* Server-side checks:
+
+  * `to` must equal `recipient.wallet_address` (wallet binding).
+  * `from` must equal session wallet.
+  * Value in **6-decimals** (USDC).
+  * Deadline not passed.
+* **Verify + store**:
+
+  * Either call `POST /deferred/verify` on your facilitator and store the resulting `authorizationId`,
+  * or verify locally and store the full payload in `payments`.
+* Create `messages(status='pending', expires_at=validBefore)`, `payments(status='authorized')`.
+* Return `{ messageId, status:"pending", expiresAt }`.
+
+**C) Accept**
+
+```
+POST /api/messages/:id/accept
+```
+
+* Row-lock message; fetch stored authorization.
+* Call facilitator `POST /deferred/settle {authorizationId}` **or** call USDC directly (if you stored the full payload) with:
+
+  ```
+  transferWithAuthorization(
+    from, to, value, validAfter, validBefore, nonce, v, r, s
+  )
+  ```
+* On success: mark `messages.accepted`, `payments.settled`, record `txHash`.
+
+**D) Decline**
+
+```
+POST /api/messages/:id/decline
+```
+
+* Mark `messages.declined`, `payments.unused`. No chain tx.
+
+**E) Expiry job**
+
+* Every 5 minutes: `pending AND expires_at < now` → `messages.expired`, `payments.unused`.
+
+> These names (“verify”, “settle”, “voucher store”) mirror the x402 deferred spec convo so you remain compatible with that direction if/when it merges. ([GitHub][1])
+
+---
+
+## 3) Data model (confirm these columns exist)
+
+* `messages`: `status`, `expires_at`, `accepted_at`.
+* `payments`:
+  `from`, `to`, `amount_usdc`, `valid_after`, `valid_before`, `nonce`, `v`, `r`, `s`,
+  `status enum('authorized','settled','unused','refund_failed')`,
+  `tx_hash_settle`.
+  Unique DB index on `(from, nonce)` (extra replay guard).
+  Partial unique: one `pending` per `(sender, recipient)`.
+
+*(This exactly matches your “store, then replay exact params” rule.)*
+
+---
+
+## 4) The exact EIP-712 for Celo USDC (copy/paste)
+
+**Domain**
+
+```ts
+{ name: 'USD Coin', version: '2', chainId: 42220,
+  verifyingContract: '0xcebA9300f2b948710d2653dD7B07f33A8B32118C' }
+```
+
+**Types**
+
+```ts
+{
+  TransferWithAuthorization: [
+    {name:'from',type:'address'},
+    {name:'to',type:'address'},
+    {name:'value',type:'uint256'},
+    {name:'validAfter',type:'uint256'},
+    {name:'validBefore',type:'uint256'},
+    {name:'nonce',type:'bytes32'},
+  ]
+}
+```
+
+**Primary type**: `"TransferWithAuthorization"`
+**Message**: `{from,to,value,validAfter,validBefore,nonce}`
+
+Wallet signs on the **sender** account; you call `transferWithAuthorization(...)` only on **accept**. (This fits the “deferred” model: off-chain IOU redeemed later.) The PR’s summary explains this approach for trust-minimized micro-payments (issue vouchers off-chain, redeem when worth it). ([GitHub][1])
+
+---
+
+## 5) Frontend (Wagmi/Viem) – no UX change
+
+* First `commit` → show 402 payload → `signTypedData`.
+* Second `commit` with `X-PAYMENT` header → you’re now “pending”.
+* The only visible change is the `scheme:"deferred"` key in the 402 JSON (for analytics/telemetry).
+
+---
+
+## 6) Safety checklist (easy to miss)
+
+* **Bind the recipient**: `to` must match `recipient.wallet_address` from DB—don’t trust client.
+* **Store every field** you will replay—do not reconstruct.
+* **Nonce size**: 32-byte hex (left-padded).
+* **USDC decimals**: 6 (store microunits as BigInt).
+* **Window**: `validAfter <= now < validBefore` (both at verify-time and at accept-time).
+* **authorizationState**: optional pre-check (0=Unused): call `authorizationState(from, nonce)` before settle for clearer errors.
+
+---
+
+## 7) How this lines up with the x402 PR
+
+* The PR’s **`deferred`** scheme: “clients issue signed vouchers off-chain… sellers later redeem” (aggregatable IOUs). You’re using **one voucher per message**, redeemed if opened; declined/expired vouchers remain unused—perfect fit. ([GitHub][1])
+* The PR also discusses **where to store vouchers** (facilitator vs server) and keeping **facilitator portability**. You can start with **server-side storage** (simplest) and later implement a facilitator “voucher store” if you want portability. ([GitHub][1])
+
+---
+
+## 8) End-to-end test cases (do these now)
+
+1. **Happy path**: authorize → pending → accept → on-chain `transferWithAuthorization` mined → DB settled.
+2. **Decline**: authorize → decline → DB unused; no chain tx.
+3. **Expire**: short SLA → wait → cron marks expired & unused; no chain tx.
+4. **Mismatch guard**: change `to` or `value` server-side → accept must **fail validation**.
+5. **Double accept**: second settle blocked by row-lock or `authorizationState != Unused`.
+6. **Expired auth**: attempt to accept after `validBefore` → USDC reverts; you mark expired/unused with a helpful error.
+
+---
+
+## 9) What (if anything) to change in Self-x402 Facilitator
+
+* Add two tiny routes described above (or keep your verify logic in app; facilitator only settles).
+* Tag payments you store with `scheme:"deferred"` vs `scheme:"exact"` (future-proof).
+* Log: `deferred.verify.ok`, `deferred.settle.ok|revert`, `authorization_state`.
+
+Even if we can’t read the README UI right now, your link indicates the facilitator already runs with Celo envs; you’re just giving it a **“store now, settle later”** lane. ([GitHub][2])
+
+---
+
+## 10) Optional next step: aggregation
+
+The x402 deferred spec allows **aggregating multiple micro-IOUs** into one on-chain claim to beat gas costs. You don’t need this for x4pp today (1 message = 1 voucher), but if you add “pay-per-tap” later, you can extend your store to **sum** vouchers per `(from→to)` and settle when it’s worth it. ([GitHub][1])
+
+---
+
+If you want, I can turn this into concrete Express handlers (verify/store/settle) that drop straight into your repo, plus a tiny viem snippet for `authorizationState` and `transferWithAuthorization` so you can run an acceptance test on Celo right away.
+
+[1]: https://github.com/coinbase/x402/pull/426 "feat: add `deferred` payment scheme spec by tmigone · Pull Request #426 · coinbase/x402 · GitHub"
+[2]: https://github.com/JulioMCruz/Self-x402/tree/main/Selfx402Facilitator "Self-x402/Selfx402Facilitator at main · JulioMCruz/Self-x402 · GitHub"

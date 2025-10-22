@@ -19,9 +19,9 @@ export function requirePayment(priceUSD: number, recipientWallet?: string) {
       const paymentProof: PaymentProof = JSON.parse(paymentHeader);
 
       // Verify payment with server-determined recipient wallet
-      const isValid = await verifyPayment(paymentProof, priceUSD, recipientWallet);
+      const result = await verifyPayment(paymentProof, priceUSD, recipientWallet);
 
-      if (!isValid) {
+      if (!result.success) {
         return res.status(402).json({
           error: "Payment verification failed",
           ...generatePaymentRequirements(priceUSD, recipientWallet),
@@ -99,7 +99,7 @@ async function verifyPayment(
   expectedTokenAddress?: string,
   expectedChainId?: number,
   expectedTokenDecimals?: number
-): Promise<boolean> {
+): Promise<{ success: boolean; txHash?: string }> {
   try {
     console.log("[Payment Verification] Starting on-chain verification...");
     console.log("[Payment Verification] Proof:", JSON.stringify(proof, null, 2));
@@ -111,21 +111,21 @@ async function verifyPayment(
     // Basic validation
     if (!proof.signature || !proof.nonce) {
       console.log("[Payment Verification] FAILED: Missing signature or nonce");
-      return false;
+      return { success: false };
     }
 
     // Verify chain ID matches expected network
     const chainIdToVerify = expectedChainId || CELO_CONFIG.chainId;
     if (proof.chainId !== chainIdToVerify) {
       console.log(`[Payment Verification] FAILED: Chain ID mismatch. Got ${proof.chainId}, expected ${chainIdToVerify}`);
-      return false;
+      return { success: false };
     }
 
     // Verify token address matches expected token
     const tokenAddressToVerify = expectedTokenAddress || CELO_CONFIG.usdcAddress;
     if (proof.tokenAddress.toLowerCase() !== tokenAddressToVerify.toLowerCase()) {
       console.log(`[Payment Verification] FAILED: Token address mismatch. Got ${proof.tokenAddress}, expected ${tokenAddressToVerify}`);
-      return false;
+      return { success: false };
     }
 
     // Verify amount matches (with small tolerance for rounding)
@@ -135,7 +135,7 @@ async function verifyPayment(
     // Validate expectedAmountUSD
     if (typeof expectedAmountUSD !== 'number' || isNaN(expectedAmountUSD) || expectedAmountUSD <= 0) {
       console.log(`[Payment Verification] FAILED: Invalid expectedAmountUSD: ${expectedAmountUSD}`);
-      return false;
+      return { success: false };
     }
     
     const expectedAmountBigInt = parseUnits(expectedAmountUSD.toFixed(tokenDecimals), tokenDecimals);
@@ -148,7 +148,7 @@ async function verifyPayment(
     console.log(`[Payment Verification] Amount check: proof=${proof.amount}, expected=${expectedAmount}, diff=${amountDiff.toString()}, tolerance=${toleranceBigInt.toString()}`);
     if (amountDiff > toleranceBigInt) {
       console.log("[Payment Verification] FAILED: Amount mismatch");
-      return false;
+      return { success: false };
     }
 
     // Verify expiration (use validBefore if expiration not present)
@@ -161,7 +161,7 @@ async function verifyPayment(
     console.log(`[Payment Verification] Expiration check: proof=${expirationSeconds}, now=${now}, valid=${expirationSeconds >= now}`);
     if (expirationSeconds < now) {
       console.log("[Payment Verification] FAILED: Payment expired");
-      return false;
+      return { success: false };
     }
 
     // CRITICAL: Verify recipient matches server-determined wallet address
@@ -170,7 +170,7 @@ async function verifyPayment(
         console.error("[Payment Verification] FAILED: Recipient address mismatch (SECURITY VIOLATION)");
         console.error(`  Expected (server): ${expectedRecipient}`);
         console.error(`  Got (client):      ${proof.recipient}`);
-        return false;
+        return { success: false };
       }
     }
 
@@ -190,7 +190,7 @@ async function verifyPayment(
       v = parseInt(sig.slice(128, 130), 16);
     } else {
       console.log("[Payment Verification] FAILED: Invalid signature format");
-      return false;
+      return { success: false };
     }
 
     const paymentAuth = {
@@ -215,7 +215,7 @@ async function verifyPayment(
 
     if (!isValid) {
       console.log("[Payment Verification] FAILED: On-chain verification failed");
-      return false;
+      return { success: false };
     }
 
     // Execute payment settlement on Celo blockchain
@@ -223,15 +223,15 @@ async function verifyPayment(
     
     if (!settlement.success) {
       console.log("[Payment Verification] FAILED: Settlement execution failed:", settlement.error);
-      return false;
+      return { success: false };
     }
 
     console.log("[Payment Verification] SUCCESS: Payment verified and settled on-chain");
     console.log("[Payment Verification] Transaction hash:", settlement.txHash);
-    return true;
+    return { success: true, txHash: settlement.txHash };
   } catch (error) {
     console.error("Payment verification error:", error);
-    return false;
+    return { success: false };
   }
 }
 

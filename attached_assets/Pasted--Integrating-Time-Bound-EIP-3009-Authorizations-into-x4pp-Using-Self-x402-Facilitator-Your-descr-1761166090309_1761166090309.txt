@@ -1,0 +1,124 @@
+### Integrating Time-Bound EIP-3009 Authorizations into x4pp Using Self-x402 Facilitator
+
+Your described flow—where the sender pre-authorizes a USDC payment via EIP-3009 (staying in their wallet until executed), but the backend only triggers the `transferWithAuthorization` if the receiver opens/accepts the message before a deadline—is a perfect fit for EIP-3009's built-in `validAfter`/`validBefore` timestamps. This creates a natural "authorization window" without needing escrows or vouchers. x4pp already has the core pieces (EIP-3009 signing, expiry worker, and `expiresAt` checks), so implementation is mostly about refining the backend to leverage the robust payment logic from JulioMCruz's Self-x402 Facilitator repo (which handles Celo-specific EIP-712 signing, nonce management, and conditional settlements). The Coinbase x402 PR (#426) introduces a "deferred" scheme for aggregated off-chain vouchers, but it's overkill here (better for batched micro-payments across sessions); we'll stick to the "exact" scheme with per-message time-bound auths for simplicity and direct alignment with your deadline requirement.
+
+This integration keeps x4pp's P2P attention market intact: senders sign upfront (no gas), receivers get paid only on timely open, and unused auths auto-expire (funds stay with sender). We'll use the Facilitator's `PaymentService` for secure verification/execution, reducing revert risks like 'invalid signature'. Estimated effort: 4-6 hours for MVP tweaks, testable on Celo testnet.
+
+#### Step 1: Prep Dependencies and Repo Sync (30-45 min)
+- **Fork/Clone**: Fork Self-x402 (https://github.com/JulioMCruz/Self-x402) and copy the `Selfx402Facilitator` folder into your x4pp backend (e.g., as `/facilitator`). This gives you battle-tested Celo USDC interactions.
+- **Install/Import**: In your Express backend (`yarn add viem ethers` if not present; already in x4pp via Wagmi). Import Facilitator modules:
+  ```typescript
+  import { PaymentService } from './facilitator/PaymentService';  // Adapt path
+  import { getCeloClient } from './facilitator/utils';  // For RPC setup
+  ```
+- **Config Update**: In `.env`, add from Self-x402: `CELO_RPC_URL=https://forno.celo.org`, `USDC_ADDRESS=0xcebA9300f2b948710d2653dD7B07f33A8B32118C`, and a relayer private key for backend gas (`RELAYER_PK=0x...`).
+- **DB Tweak**: In Drizzle schema (`messages` table), ensure `validAfter`, `validBefore` (as bigint), and `authorization` (JSON for {v,r,s,nonce}) are stored per message.
+
+#### Step 2: Enhance Frontend Signing for Time-Bound Auth (45-60 min)
+- **Why**: Sender signs EIP-712 with `validBefore` set to deadline (e.g., sentAt + SLA hours), ensuring the auth self-expires if not executed timely.
+- **Implementation** (in React/Wagmi component, e.g., `/app/compose`):
+  - Use x4pp's existing price guide to set `bidUsd` (e.g., 0.50 USDC = '500000' with 6 decimals).
+  - Generate deadline: `const validBefore = Math.floor(Date.now() / 1000) + (slaHours * 3600);` (from recipient's SLA).
+  - Sign via Viem (adapt x4pp's wallet hook):
+    ```typescript
+    import { useWalletClient } from 'wagmi';
+    import { parseUnits } from 'viem';
+
+    const { data: walletClient } = useWalletClient();
+
+    const signAuthorization = async (to: `0x${string}`, bidUsd: string, slaHours: number) => {
+      const value = parseUnits(bidUsd, 6).toString();  // USDC 6 decimals
+      const validAfter = '0';  // Immediate
+      const validBefore = (Math.floor(Date.now() / 1000) + (slaHours * 3600)).toString();
+      const nonce = `0x${crypto.getRandomValues(new Uint8Array(32)).reduce((str,byte)=>str+byte.toString(16).padStart(2,'0'),'')}`;  // Random bytes32
+
+      const typedData = {
+        domain: { name: 'USD Coin', version: '2', chainId: 42220n, verifyingContract: '0xcebA9300f2b948710d2653dD7B07f33A8B32118C' as const },
+        types: {
+          TransferWithAuthorization: [
+            { name: 'from', type: 'address' },
+            { name: 'to', type: 'address' },
+            { name: 'value', type: 'uint256' },
+            { name: 'validAfter', type: 'uint256' },
+            { name: 'validBefore', type: 'uint256' },
+            { name: 'nonce', type: 'bytes32' },
+          ],
+        },
+        primaryType: 'TransferWithAuthorization',
+        message: { from: address!, to, value, validAfter, validBefore, nonce },
+      } as const;
+
+      const signature = await walletClient!.signTypedData(typedData);
+      const [v, r, s] = [signature.slice(-2), '0x' + signature.slice(2, 66), '0x' + signature.slice(66, 130)].map(x => x === '0x1b' ? 27 : x === '0x1c' ? 28 : parseInt(x.slice(2), 16)) as [number, `0x${string}`, `0x${string}`];
+
+      return { value, validAfter, validBefore, nonce, v, r, s };  // Send to /api/commit
+    };
+    ```
+  - On submit: POST to `/api/commit` with body `{ content, bidUsd, toUsername, slaHours }` and headers `{ 'X-PAYMENT': JSON.stringify(auth) }`.
+- **Test**: Console.log signature; verify with `viem.verifyTypedData` (should match sender address).
+
+#### Step 3: Backend: Store & Conditionally Execute via Facilitator (1-1.5 hours)
+- **Why**: Use Self-x402's `PaymentService` for signature verification and execution— it handles nonce replay protection, timestamp checks, and Celo relaying, preventing reverts.
+- **Adapt Facilitator**: In `/facilitator/PaymentService.ts` (or inline), the core logic verifies sig before storing:
+  ```typescript
+  // From Self-x402 (simplified; copy/adapt)
+  import { recoverTypedDataAddress } from 'viem';
+
+  export class PaymentService {
+    async verifyAndStoreAuth(req: Request, auth: any) {
+      const { from, to, value, validAfter, validBefore, nonce, v, r, s } = auth;
+      const typedData = { /* same as frontend */ };  // Reconstruct
+      const recovered = await recoverTypedDataAddress({ ...typedData, signature: `0x${r.slice(2)}${s.slice(2)}${v.toString(16).padStart(2, '0')}` });
+      if (recovered !== from) throw new Error('Invalid signature');
+
+      // Store in DB (messages table)
+      await db.insert(messages).values({
+        senderNullifier: from,  // Or integrate Self nullifier
+        recipientNullifier: to,
+        content: req.body.content,
+        bidUsd: value,
+        status: 'pending',
+        validAfter: BigInt(validAfter),
+        validBefore: BigInt(validBefore),
+        authorization: { v, r, s, nonce },  // JSON
+        expiresAt: new Date(Number(validBefore) * 1000),
+      });
+      return { messageId: '...', status: 'pending' };
+    }
+
+    async executeIfTimely(messageId: string) {
+      const msg = await db.select().from(messages).where(eq(messages.id, messageId)).then(r => r[0]);
+      if (new Date() > new Date(Number(msg.validBefore) * 1000)) throw new Error('Expired');
+
+      const { from, to, value, validAfter, validBefore, authorization } = msg;
+      const client = getCeloClient();  // Viem client with relayer account
+      const hash = await client.writeContract({
+        address: USDC_ADDRESS,
+        abi: USDC_ABI,  // transferWithAuthorization fragment
+        functionName: 'transferWithAuthorization',
+        args: [from, to, BigInt(value), BigInt(validAfter), BigInt(validBefore), authorization.nonce, authorization.v, authorization.r, authorization.s],
+        account: RELAYER_PK,  // Backend pays gas (~$0.01 on Celo)
+      });
+      await db.update(messages).set({ status: 'accepted', txHash: hash }).where(eq(messages.id, messageId));
+      return hash;
+    }
+  }
+  ```
+- **Routes**:
+  - `POST /api/commit`: Call `verifyAndStoreAuth` (returns 402 if invalid; else pending).
+  - `POST /api/messages/:id/accept`: If `new Date() < expiresAt`, call `executeIfTimely`; else mark 'expired'.
+  - Expiry Worker (existing cron): Query `status='pending' AND expiresAt < NOW()`, mark 'expired' (no execution).
+- **x402 PR Tie-In**: For future, adapt the deferred voucher's nonce sequencing if aggregating reply bounties, but skip for now—your per-message flow is "exact".
+
+#### Step 4: Security & Edge Cases (30-45 min)
+- **Replay/Expiry**: Facilitator's nonce (random bytes32) + `validBefore` prevents reuse. Worker auto-marks expired (as in x4pp).
+- **Integrate Self Verification**: Before signing, require nullifier check (from Self-x402) to tie auth to unique human.
+- **Gas/Errors**: Relayer handles execution; catch reverts (e.g., 'invalid signature' via try-catch, log for debug).
+- **Test**: On Alfajores testnet (faucet USDC), send/accept before/after deadline; check celoscan for tx only on timely accept.
+
+#### Step 5: Deploy & Monitor (15-30 min)
+- Vercel/Neon for backend; Replit for frontend.
+- Monitor: Log tx hashes; use Celo explorer for audits.
+- Scale: For high volume, batch executions (inspired by x402 PR's aggregation).
+
+This slots directly into x4pp's bidding/inbox flows, making deadlines enforceable onchain without sender risk. If integrating deferred vouchers later (per PR #426), it could batch low-bid messages for efficiency. Test the signing first—hit me if reverts persist!

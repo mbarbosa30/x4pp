@@ -119,7 +119,7 @@ router.post("/", async (req, res) => {
     }
 
     // SECURITY: Pass server-determined recipient wallet and token details to prevent payment theft
-    const paymentValid = await verifyPayment(
+    const paymentResult = await verifyPayment(
       paymentProof, 
       bidAmount, 
       recipient.walletAddress,
@@ -128,7 +128,7 @@ router.post("/", async (req, res) => {
       paymentToken.decimals
     );
 
-    if (!paymentValid) {
+    if (!paymentResult.success) {
       // Return 402 with PaymentRequirements for retry (x402 protocol compliance)
       // Generate bytes32 nonce for EIP-3009 compatibility
       const { createHash } = await import('crypto');
@@ -180,8 +180,8 @@ router.post("/", async (req, res) => {
       })
       .returning();
 
-    // Store payment record as PENDING (escrowed, not settled yet)
-    // Store complete signature object with validAfter/validBefore for later settlement
+    // Store payment record as SETTLED (payment already executed on-chain)
+    // Store complete signature object with validAfter/validBefore for later refunds if needed
     const signatureWithParams = JSON.stringify({
       ...paymentProof.signature,
       validAfter: paymentProof.validAfter || 0,
@@ -195,10 +195,11 @@ router.post("/", async (req, res) => {
       amount: bidAmount.toFixed(paymentToken.decimals),
       sender: paymentProof.sender || senderNullifier,
       recipient: recipient.walletAddress,
-      txHash: paymentProof.txHash,
-      status: "pending", // Escrowed until acceptance
+      txHash: paymentResult.txHash,
+      status: "settled", // Payment already settled on-chain
       nonce: paymentProof.nonce,
       signature: signatureWithParams,
+      settledAt: new Date(),
     });
 
     // Log reputation event
