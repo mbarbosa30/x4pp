@@ -8,6 +8,10 @@ import x402Routes from "./x402/routes";
 import selfRoutes from "./self/routes";
 import quoteRoutes from "./api/quote";
 import commitRoutes from "./api/commit";
+import inboxRoutes from "./api/inbox";
+import openRoutes from "./api/open";
+import reputationRoutes from "./api/reputation";
+import { startRefundMonitor } from "./refunds";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Mount x402 payment routes
@@ -19,6 +23,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Mount quote and commit routes
   app.use("/api/quote", quoteRoutes);
   app.use("/api/commit", commitRoutes);
+  
+  // Mount inbox and open routes
+  app.use("/api/inbox", inboxRoutes);
+  app.use("/api/open", openRoutes);
+  
+  // Mount reputation routes
+  app.use("/api/reputation", reputationRoutes);
+  
+  // Start auto-refund monitor
+  startRefundMonitor();
   // Get user by username
   app.get("/api/users/:username", async (req, res) => {
     try {

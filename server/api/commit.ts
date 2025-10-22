@@ -145,8 +145,8 @@ router.post("/", async (req, res) => {
       settledAt: new Date(),
     });
 
-    // Enqueue message
-    await enqueueMessage(newMessage.id, recipient.id, amountUSD, expiresAt);
+    // Enqueue message (use same identifier as message storage)
+    await enqueueMessage(newMessage.id, recipientIdentifier, amountUSD, expiresAt);
 
     // Log reputation event
     await logReputationEvent(senderNullifier, "sent", newMessage.id);
