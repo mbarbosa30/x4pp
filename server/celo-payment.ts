@@ -90,23 +90,33 @@ export interface PaymentAuthorization {
 
 export function generatePaymentRequirements(
   recipientWallet: string,
-  amountUsd: number
+  amountUsd: number,
+  tokenAddress?: string,
+  tokenSymbol?: string,
+  tokenDecimals?: number,
+  chainId?: number
 ): PaymentRequirements {
-  const usdcAmount = parseUnits(amountUsd.toFixed(6), 6);
+  // Use provided token details or fall back to USDC defaults
+  const finalTokenAddress = tokenAddress || USDC_ADDRESS;
+  const finalTokenSymbol = tokenSymbol || 'USDC';
+  const finalTokenDecimals = tokenDecimals || 6;
+  const finalChainId = chainId || 42220;
+  
+  const tokenAmount = parseUnits(amountUsd.toFixed(finalTokenDecimals), finalTokenDecimals);
   
   return {
-    amount: usdcAmount.toString(),
-    currency: 'USDC',
+    amount: tokenAmount.toString(),
+    currency: finalTokenSymbol,
     recipient: recipientWallet as Address,
     network: {
-      chainId: 42220,
-      name: 'Celo Mainnet',
+      chainId: finalChainId,
+      name: finalChainId === 42220 ? 'Celo Mainnet' : 'Celo',
       rpcUrl: CELO_RPC_URL,
     },
     token: {
-      address: USDC_ADDRESS,
-      symbol: 'USDC',
-      decimals: 6,
+      address: finalTokenAddress as Address,
+      symbol: finalTokenSymbol,
+      decimals: finalTokenDecimals,
     },
     validUntil: Math.floor(Date.now() / 1000) + 3600,
   };
@@ -115,7 +125,8 @@ export function generatePaymentRequirements(
 export async function verifyPaymentAuthorization(
   auth: PaymentAuthorization,
   expectedRecipient: Address,
-  expectedAmount: bigint
+  expectedAmount: bigint,
+  tokenAddress?: Address
 ): Promise<boolean> {
   try {
     if (auth.to.toLowerCase() !== expectedRecipient.toLowerCase()) {
@@ -135,8 +146,9 @@ export async function verifyPaymentAuthorization(
       return false;
     }
 
+    const finalTokenAddress = tokenAddress || USDC_ADDRESS;
     const isNonceUsed = await publicClient.readContract({
-      address: USDC_ADDRESS,
+      address: finalTokenAddress,
       abi: USDC_ABI,
       functionName: 'authorizationState',
       args: [auth.from, auth.nonce],
@@ -155,7 +167,9 @@ export async function verifyPaymentAuthorization(
 }
 
 export async function executePaymentSettlement(
-  auth: PaymentAuthorization
+  auth: PaymentAuthorization,
+  tokenAddress?: Address,
+  tokenDecimals?: number
 ): Promise<{ success: boolean; txHash?: string; error?: string }> {
   try {
     if (!process.env.PAYMENT_WALLET_PRIVATE_KEY) {
@@ -170,8 +184,11 @@ export async function executePaymentSettlement(
       transport: http(CELO_RPC_URL),
     });
 
+    const finalTokenAddress = tokenAddress || USDC_ADDRESS;
+    const finalTokenDecimals = tokenDecimals || 6;
+
     const hash = await walletClient.writeContract({
-      address: USDC_ADDRESS,
+      address: finalTokenAddress,
       abi: USDC_ABI,
       functionName: 'transferWithAuthorization',
       args: [
@@ -192,7 +209,7 @@ export async function executePaymentSettlement(
     console.log('Payment settled on-chain:', {
       from: auth.from,
       to: auth.to,
-      value: formatUnits(BigInt(auth.value), 6),
+      value: formatUnits(BigInt(auth.value), finalTokenDecimals),
       txHash: hash,
     });
 

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "../db";
-import { users, messages, payments, insertMessageSchema } from "@shared/schema";
+import { users, messages, payments, tokens, insertMessageSchema } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { calculatePriceForUser } from "../pricing";
 import { getQueuedMessageCount, enqueueMessage } from "../queue";
@@ -26,20 +26,32 @@ router.post("/", async (req, res) => {
       });
     }
 
-    // Find recipient
-    const [recipient] = await db
-      .select()
+    // Find recipient with their selected payment token
+    const result = await db
+      .select({
+        user: users,
+        token: tokens,
+      })
       .from(users)
+      .leftJoin(tokens, eq(users.tokenId, tokens.id))
       .where(eq(users.username, recipientUsername))
       .limit(1);
 
-    if (!recipient) {
+    if (result.length === 0) {
       return res.status(404).json({ error: "Recipient not found" });
     }
+
+    const { user: recipient, token: paymentToken } = result[0];
 
     if (!recipient.walletAddress) {
       return res.status(400).json({ 
         error: "Recipient has not configured a payment wallet" 
+      });
+    }
+
+    if (!paymentToken || !paymentToken.isActive) {
+      return res.status(400).json({ 
+        error: "Recipient's selected payment token is not available" 
       });
     }
 
@@ -79,35 +91,25 @@ router.post("/", async (req, res) => {
       const nonceString = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       const nonce = `0x${createHash('sha256').update(nonceString).digest('hex')}`;
       
-      const paymentRequirements = {
-        amount: amountUSD.toFixed(2),
-        currency: "USDC",
-        chainId: 42220, // Celo mainnet
-        tokenAddress: process.env.USDC_ADDRESS || "0x765DE816845861e75A25fCA122bb6898B8B1282a",
-        payee: recipient.walletAddress,
-        nonce,
-        facilitatorUrl: process.env.FACILITATOR_URL || "https://facilitator.x402.org",
-        memo: `Message to ${recipient.displayName}`,
-      };
-
       return res.status(402).json({
         error: "Payment required",
         paymentRequirements: [{
-          amount: paymentRequirements.amount,
+          amount: amountUSD.toFixed(paymentToken.decimals),
           network: {
-            chainId: paymentRequirements.chainId,
+            chainId: paymentToken.chainId,
           },
           asset: {
-            address: paymentRequirements.tokenAddress,
-            symbol: paymentRequirements.currency,
+            address: paymentToken.address,
+            symbol: paymentToken.symbol,
           },
-          recipient: paymentRequirements.payee,
-          nonce: paymentRequirements.nonce,
+          recipient: recipient.walletAddress,
+          nonce,
           expiration: Date.now() + 15 * 60 * 1000, // 15 minutes
         }],
         quote: {
           priceUSD: amountUSD,
-          priceUSDC: amountUSD.toFixed(6),
+          price: amountUSD.toFixed(paymentToken.decimals),
+          tokenSymbol: paymentToken.symbol,
         },
       });
     }
@@ -120,8 +122,15 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ error: "Invalid X-PAYMENT header format" });
     }
 
-    // SECURITY: Pass server-determined recipient wallet to prevent payment theft
-    const paymentValid = await verifyPayment(paymentProof, amountUSD, recipient.walletAddress);
+    // SECURITY: Pass server-determined recipient wallet and token details to prevent payment theft
+    const paymentValid = await verifyPayment(
+      paymentProof, 
+      amountUSD, 
+      recipient.walletAddress,
+      paymentToken.address,
+      paymentToken.chainId,
+      paymentToken.decimals
+    );
 
     if (!paymentValid) {
       // Return 402 with PaymentRequirements for retry (x402 protocol compliance)
@@ -133,13 +142,13 @@ router.post("/", async (req, res) => {
       return res.status(402).json({ 
         error: "Payment verification failed",
         paymentRequirements: [{
-          amount: amountUSD.toFixed(2),
+          amount: amountUSD.toFixed(paymentToken.decimals),
           network: {
-            chainId: 42220,
+            chainId: paymentToken.chainId,
           },
           asset: {
-            address: process.env.USDC_ADDRESS || "0x765DE816845861e75A25fCA122bb6898B8B1282a",
-            symbol: "USDC",
+            address: paymentToken.address,
+            symbol: paymentToken.symbol,
           },
           recipient: recipient.walletAddress,
           nonce,
@@ -147,7 +156,8 @@ router.post("/", async (req, res) => {
         }],
         quote: {
           priceUSD: amountUSD,
-          priceUSDC: amountUSD.toFixed(6),
+          price: amountUSD.toFixed(paymentToken.decimals),
+          tokenSymbol: paymentToken.symbol,
         },
       });
     }
@@ -174,9 +184,9 @@ router.post("/", async (req, res) => {
     // Store payment record
     await db.insert(payments).values({
       messageId: newMessage.id,
-      chainId: paymentProof.chainId || 42220,
-      tokenAddress: paymentProof.tokenAddress || process.env.USDC_ADDRESS!,
-      amount: amountUSD.toFixed(6),
+      chainId: paymentProof.chainId || paymentToken.chainId,
+      tokenAddress: paymentProof.tokenAddress || paymentToken.address,
+      amount: amountUSD.toFixed(paymentToken.decimals),
       sender: paymentProof.sender || senderNullifier,
       recipient: recipient.walletAddress,
       txHash: paymentProof.txHash,

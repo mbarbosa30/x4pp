@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "../db";
-import { users } from "@shared/schema";
+import { users, tokens } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { calculatePriceForUser } from "../pricing";
 import { getQueuedMessageCount } from "../queue";
@@ -20,15 +20,27 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ error: "recipientUsername is required" });
     }
 
-    // Find recipient by username
-    const [recipient] = await db
-      .select()
+    // Find recipient with their selected payment token
+    const result = await db
+      .select({
+        user: users,
+        token: tokens,
+      })
       .from(users)
+      .leftJoin(tokens, eq(users.tokenId, tokens.id))
       .where(eq(users.username, recipientUsername))
       .limit(1);
 
-    if (!recipient) {
+    if (result.length === 0) {
       return res.status(404).json({ error: "Recipient not found" });
+    }
+
+    const { user: recipient, token: paymentToken } = result[0];
+
+    if (!paymentToken || !paymentToken.isActive) {
+      return res.status(400).json({ 
+        error: "Recipient's selected payment token is not available" 
+      });
     }
 
     // Get current queue count (use recipient.id for consistent tracking)
@@ -58,13 +70,19 @@ router.post("/", async (req, res) => {
 
     const paymentRequirements = generatePaymentRequirements(
       recipient.walletAddress,
-      parseFloat(quote.priceUSD)
+      parseFloat(quote.priceUSD),
+      paymentToken.address,
+      paymentToken.symbol,
+      paymentToken.decimals,
+      paymentToken.chainId
     );
 
     // Return format that frontend expects, now with x402 payment requirements
+    const priceInToken = parseFloat(quote.priceUSD).toFixed(paymentToken.decimals);
     res.json({
       priceUSD: parseFloat(quote.priceUSD),
-      priceUSDC: quote.priceUSD,
+      price: priceInToken,
+      tokenSymbol: paymentToken.symbol,
       surgeMultiplier: quote.surge.multiplier,
       humanDiscountApplied: quote.humanDiscountApplied,
       surge: quote.surge,

@@ -92,7 +92,10 @@ export function generatePaymentRequirements(
 async function verifyPayment(
   proof: PaymentProof,
   expectedAmountUSD: number,
-  expectedRecipient?: string
+  expectedRecipient?: string,
+  expectedTokenAddress?: string,
+  expectedChainId?: number,
+  expectedTokenDecimals?: number
 ): Promise<boolean> {
   try {
     console.log("[Payment Verification] Starting on-chain verification...");
@@ -108,24 +111,32 @@ async function verifyPayment(
       return false;
     }
 
-    // Verify chain ID matches Celo
-    if (proof.chainId !== CELO_CONFIG.chainId) {
-      console.log(`[Payment Verification] FAILED: Chain ID mismatch. Got ${proof.chainId}, expected ${CELO_CONFIG.chainId}`);
+    // Verify chain ID matches expected network
+    const chainIdToVerify = expectedChainId || CELO_CONFIG.chainId;
+    if (proof.chainId !== chainIdToVerify) {
+      console.log(`[Payment Verification] FAILED: Chain ID mismatch. Got ${proof.chainId}, expected ${chainIdToVerify}`);
       return false;
     }
 
-    // Verify token is USDC
-    if (proof.tokenAddress.toLowerCase() !== CELO_CONFIG.usdcAddress.toLowerCase()) {
-      console.log(`[Payment Verification] FAILED: Token address mismatch. Got ${proof.tokenAddress}, expected ${CELO_CONFIG.usdcAddress}`);
+    // Verify token address matches expected token
+    const tokenAddressToVerify = expectedTokenAddress || CELO_CONFIG.usdcAddress;
+    if (proof.tokenAddress.toLowerCase() !== tokenAddressToVerify.toLowerCase()) {
+      console.log(`[Payment Verification] FAILED: Token address mismatch. Got ${proof.tokenAddress}, expected ${tokenAddressToVerify}`);
       return false;
     }
 
     // Verify amount matches (with small tolerance for rounding)
-    const expectedAmount = formatUSDC(expectedAmountUSD);
-    const tolerance = "1000"; // 0.001 USDC tolerance
-    const amountDiff = Math.abs(parseInt(proof.amount) - parseInt(expectedAmount));
-    console.log(`[Payment Verification] Amount check: proof=${proof.amount}, expected=${expectedAmount}, diff=${amountDiff}, tolerance=${tolerance}`);
-    if (amountDiff > parseInt(tolerance)) {
+    const tokenDecimals = expectedTokenDecimals || 6;
+    const { parseUnits } = await import('viem');
+    const expectedAmountBigInt = parseUnits(expectedAmountUSD.toFixed(tokenDecimals), tokenDecimals);
+    const expectedAmount = expectedAmountBigInt.toString();
+    const proofAmountBigInt = BigInt(proof.amount);
+    const toleranceBigInt = BigInt("1000"); // Small tolerance for rounding
+    const amountDiff = proofAmountBigInt > expectedAmountBigInt 
+      ? proofAmountBigInt - expectedAmountBigInt 
+      : expectedAmountBigInt - proofAmountBigInt;
+    console.log(`[Payment Verification] Amount check: proof=${proof.amount}, expected=${expectedAmount}, diff=${amountDiff.toString()}, tolerance=${toleranceBigInt.toString()}`);
+    if (amountDiff > toleranceBigInt) {
       console.log("[Payment Verification] FAILED: Amount mismatch");
       return false;
     }
@@ -167,10 +178,12 @@ async function verifyPayment(
 
     // Verify payment authorization on-chain using server-determined recipient
     const recipientToVerify = (expectedRecipient || proof.recipient) as `0x${string}`;
+    const tokenToVerify = (expectedTokenAddress || tokenAddressToVerify) as `0x${string}`;
     const isValid = await verifyPaymentAuthorization(
       paymentAuth,
       recipientToVerify,
-      BigInt(expectedAmount)
+      BigInt(expectedAmount),
+      tokenToVerify
     );
 
     if (!isValid) {
@@ -179,7 +192,7 @@ async function verifyPayment(
     }
 
     // Execute payment settlement on Celo blockchain
-    const settlement = await executePaymentSettlement(paymentAuth);
+    const settlement = await executePaymentSettlement(paymentAuth, tokenToVerify, tokenDecimals);
     
     if (!settlement.success) {
       console.log("[Payment Verification] FAILED: Settlement execution failed:", settlement.error);

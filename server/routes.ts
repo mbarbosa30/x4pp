@@ -15,6 +15,7 @@ import adminRoutes from "./api/admin";
 import profileRoutes from "./api/profile";
 import usersRoutes from "./api/users";
 import authRoutes from "./api/auth";
+import tokensRoutes from "./api/tokens";
 import { startRefundMonitor } from "./refunds";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -47,6 +48,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Mount user registration routes
   app.use("/api/users", usersRoutes);
   
+  // Mount token management routes
+  app.use("/api/tokens", tokensRoutes);
+  
   // Start auto-refund monitor
   startRefundMonitor();
   // Get user by username
@@ -63,7 +67,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "User not found" });
       }
 
-      res.json(user[0]);
+      const foundUser = user[0];
+      
+      // Check if profile is public or if user is viewing their own profile
+      const authenticatedUser = (req as any).session?.username;
+      const isOwner = authenticatedUser === username;
+      
+      if (!foundUser.isPublic && !isOwner) {
+        // Profile is private - return minimal information
+        return res.json({
+          username: foundUser.username,
+          displayName: foundUser.displayName,
+          isPublic: false,
+          message: "This profile is private",
+        });
+      }
+
+      res.json(foundUser);
     } catch (error) {
       console.error("Error fetching user:", error);
       res.status(500).json({ error: "Failed to fetch user" });

@@ -1,7 +1,18 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, integer, decimal, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, integer, decimal, boolean, foreignKey } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+
+export const tokens = pgTable("tokens", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  symbol: text("symbol").notNull().unique(), // e.g., "USDC", "cUSD"
+  name: text("name").notNull(), // e.g., "USD Coin"
+  address: text("address").notNull(), // Contract address
+  decimals: integer("decimals").notNull().default(6), // Token decimals
+  chainId: integer("chain_id").notNull(), // Blockchain network
+  isActive: boolean("is_active").notNull().default(true), // Can be used for payments
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
 
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -9,6 +20,8 @@ export const users = pgTable("users", {
   selfNullifier: text("self_nullifier").unique(),
   walletAddress: text("wallet_address"), // Celo wallet address for receiving payments
   displayName: text("display_name").notNull(),
+  tokenId: varchar("token_id").references(() => tokens.id), // Preferred payment token (foreign key to tokens)
+  isPublic: boolean("is_public").notNull().default(true), // Public profile visibility
   basePrice: decimal("base_price", { precision: 10, scale: 2 }).notNull().default("0.05"),
   surgeAlpha: decimal("surge_alpha", { precision: 4, scale: 2 }).notNull().default("1.5"), // Surge pricing coefficient
   surgeK: decimal("surge_k", { precision: 4, scale: 2 }).notNull().default("2.0"), // Surge pricing exponent
@@ -108,6 +121,11 @@ export const messageQueue = pgTable("message_queue", {
 });
 
 // Insert schemas
+export const insertTokenSchema = createInsertSchema(tokens).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   createdAt: true,
@@ -150,6 +168,9 @@ export const insertMessageQueueSchema = createInsertSchema(messageQueue).omit({
 });
 
 // Types
+export type InsertToken = z.infer<typeof insertTokenSchema>;
+export type Token = typeof tokens.$inferSelect;
+
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 

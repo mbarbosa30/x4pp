@@ -21,6 +21,20 @@ router.get("/:username", async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
+    // Check if profile is public or if user is viewing their own profile
+    const authenticatedUser = (req as any).session?.username;
+    const isOwner = authenticatedUser === username;
+    
+    if (!user.isPublic && !isOwner) {
+      // Profile is private - return minimal information
+      return res.json({
+        username: user.username,
+        displayName: user.displayName,
+        isPublic: false,
+        message: "This profile is private",
+      });
+    }
+
     // Get message statistics
     const recipientIdentifier = user.selfNullifier || user.id;
     
@@ -58,6 +72,7 @@ router.get("/:username", async (req, res) => {
       username: user.username,
       displayName: user.displayName,
       verified: user.verified,
+      isPublic: user.isPublic,
       walletAddress: user.walletAddress,
       basePrice: user.basePrice,
       surgeAlpha: user.surgeAlpha,

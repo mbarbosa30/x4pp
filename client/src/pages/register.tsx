@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useLocation } from "wouter";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -5,14 +6,15 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { useWallet } from "@/providers/WalletProvider";
-import { Wallet, User, DollarSign, Clock } from "lucide-react";
+import { Wallet, User, DollarSign, Clock, Coins, Eye, EyeOff } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 
 const registrationFormSchema = z.object({
@@ -23,6 +25,8 @@ const registrationFormSchema = z.object({
   displayName: z.string()
     .min(1, "Display name is required")
     .max(100, "Display name must be at most 100 characters"),
+  tokenId: z.string().min(1, "Please select a payment token"),
+  isPublic: z.boolean(),
   basePrice: z.number()
     .min(0.01, "Base price must be at least $0.01")
     .max(100, "Base price must be at most $100"),
@@ -45,16 +49,34 @@ const registrationFormSchema = z.object({
 
 type RegistrationFormValues = z.infer<typeof registrationFormSchema>;
 
+interface Token {
+  id: string;
+  symbol: string;
+  name: string;
+  address: string;
+  decimals: number;
+  chainId: number;
+  isActive: boolean;
+}
+
 export default function Register() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const { address: walletAddress, isConnected, connect } = useWallet();
+  
+  const { data: tokens = [], isLoading: tokensLoading } = useQuery<Token[]>({
+    queryKey: ['/api/tokens'],
+  });
+
+  const activeTokens = tokens.filter((token) => token.isActive);
   
   const form = useForm<RegistrationFormValues>({
     resolver: zodResolver(registrationFormSchema),
     defaultValues: {
       username: "",
       displayName: "",
+      tokenId: "",
+      isPublic: true,
       basePrice: 0.10,
       surgeAlpha: 1.20,
       humanDiscountPct: 0.85,
@@ -63,6 +85,13 @@ export default function Register() {
       slaHours: 48,
     },
   });
+
+  useEffect(() => {
+    if (activeTokens.length > 0 && !form.getValues("tokenId")) {
+      const defaultTokenId = activeTokens.find((t) => t.symbol === "USDC")?.id || activeTokens[0].id;
+      form.setValue("tokenId", defaultTokenId);
+    }
+  }, [activeTokens, form]);
 
   const registerMutation = useMutation({
     mutationFn: async (data: RegistrationFormValues & { walletAddress: string }) => {
@@ -178,6 +207,69 @@ export default function Register() {
                         <Input {...field} data-testid="input-display-name" placeholder="Your Name" />
                       </FormControl>
                       <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              {/* Token Selection & Privacy */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="tokenId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center gap-2">
+                        <Coins className="h-4 w-4" />
+                        Payment Token
+                      </FormLabel>
+                      <Select 
+                        value={field.value} 
+                        onValueChange={field.onChange}
+                        disabled={tokensLoading || activeTokens.length === 0}
+                      >
+                        <FormControl>
+                          <SelectTrigger data-testid="select-token">
+                            <SelectValue placeholder="Select token" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {activeTokens.map((token) => (
+                            <SelectItem key={token.id} value={token.id}>
+                              {token.symbol} - {token.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormDescription>
+                        Which token you accept for payments
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="isPublic"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                      <div className="space-y-0.5">
+                        <FormLabel className="flex items-center gap-2">
+                          {field.value ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                          Public Profile
+                        </FormLabel>
+                        <FormDescription>
+                          Allow anyone to send you messages
+                        </FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                          data-testid="switch-public-profile"
+                        />
+                      </FormControl>
                     </FormItem>
                   )}
                 />
