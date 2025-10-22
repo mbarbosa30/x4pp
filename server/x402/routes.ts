@@ -111,8 +111,7 @@ router.post("/commit", async (req, res) => {
       // Return 402 with payment requirements
       const paymentReqs = generatePaymentRequirements(
         pricing.priceUSD,
-        recipient.walletAddress,
-        5
+        recipient.walletAddress
       );
       return res.status(402).json({
         message: "Payment required",
