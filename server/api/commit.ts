@@ -184,8 +184,6 @@ router.post("/", async (req, res) => {
       .values({
         senderWallet: senderWallet.toLowerCase(), // Normalize to lowercase
         recipientWallet: recipient.walletAddress.toLowerCase(), // Normalize to lowercase
-        senderNullifier: null, // Legacy field - deprecated
-        recipientNullifier: null, // Legacy field - deprecated
         senderName,
         senderEmail: senderEmail || null,
         content,

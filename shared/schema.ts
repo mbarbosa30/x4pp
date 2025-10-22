@@ -17,8 +17,7 @@ export const tokens = pgTable("tokens", {
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   username: text("username").notNull().unique(),
-  selfNullifier: text("self_nullifier").unique(),
-  walletAddress: text("wallet_address"), // Celo wallet address for receiving payments
+  walletAddress: text("wallet_address").notNull().unique(), // Celo wallet address (required for messaging and identity)
   displayName: text("display_name").notNull(),
   tokenId: varchar("token_id").references(() => tokens.id), // Preferred payment token (foreign key to tokens)
   isPublic: boolean("is_public").notNull().default(true), // Public profile visibility
@@ -32,12 +31,9 @@ export const users = pgTable("users", {
 
 export const messages = pgTable("messages", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  // Wallet-based routing (new primary identifiers)
+  // Wallet-based routing (primary identifiers)
   senderWallet: text("sender_wallet").notNull(),
   recipientWallet: text("recipient_wallet").notNull(),
-  // Legacy nullifier fields (deprecated - kept for backward compatibility)
-  senderNullifier: text("sender_nullifier"),
-  recipientNullifier: text("recipient_nullifier"),
   senderName: text("sender_name").notNull(),
   senderEmail: text("sender_email"),
   content: text("content").notNull(),

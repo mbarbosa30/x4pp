@@ -35,19 +35,17 @@ router.get("/:username", async (req, res) => {
       });
     }
 
-    // Get message statistics
-    const recipientIdentifier = user.selfNullifier || user.id;
-    
+    // Get message statistics (wallet-based routing - wallet is now required)
     const [{ messagesReceived }] = await db
       .select({ messagesReceived: sql<number>`COUNT(*)` })
       .from(messages)
-      .where(eq(messages.recipientNullifier, recipientIdentifier));
+      .where(eq(messages.recipientWallet, user.walletAddress.toLowerCase()));
 
     const [{ messagesOpened }] = await db
       .select({ messagesOpened: sql<number>`COUNT(*)` })
       .from(messages)
       .where(and(
-        eq(messages.recipientNullifier, recipientIdentifier),
+        eq(messages.recipientWallet, user.walletAddress.toLowerCase()),
         sql`opened_at IS NOT NULL`
       ));
 
@@ -60,11 +58,11 @@ router.get("/:username", async (req, res) => {
         eq(payments.status, 'settled')
       ));
 
-    // Get reputation score
+    // Get reputation score (wallet-based)
     const [reputation] = await db
       .select()
       .from(reputationScores)
-      .where(eq(reputationScores.nullifier, recipientIdentifier))
+      .where(eq(reputationScores.nullifier, user.walletAddress.toLowerCase()))
       .limit(1);
 
     res.json({

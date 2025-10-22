@@ -3,17 +3,8 @@ import { db } from "../db";
 import { users, insertUserSchema } from "@shared/schema";
 import { eq, or } from "drizzle-orm";
 import { z } from "zod";
-import crypto from "crypto";
 
 const router = Router();
-
-// Generate cryptographically unique nullifier from wallet address
-function generateNullifier(walletAddress: string): string {
-  return crypto.createHash('sha256')
-    .update(walletAddress.toLowerCase())
-    .digest('hex')
-    .substring(0, 32);
-}
 
 // Registration endpoint
 router.post("/", async (req, res) => {
@@ -45,17 +36,13 @@ router.post("/", async (req, res) => {
     // Normalize wallet address to lowercase for consistent storage
     const normalizedWalletAddress = validatedData.walletAddress.toLowerCase();
 
-    // Generate unique nullifier from wallet address
-    const selfNullifier = generateNullifier(normalizedWalletAddress);
-
-    // Check for existing username, wallet, or nullifier
+    // Check for existing username or wallet
     const [existing] = await db
       .select()
       .from(users)
       .where(or(
         eq(users.username, validatedData.username),
-        eq(users.walletAddress, normalizedWalletAddress),
-        eq(users.selfNullifier, selfNullifier)
+        eq(users.walletAddress, normalizedWalletAddress)
       ))
       .limit(1);
 
@@ -71,14 +58,13 @@ router.post("/", async (req, res) => {
       return res.status(409).json({ error: "Account already exists" });
     }
 
-    // Create new user with new schema
+    // Create new user with wallet-based identity
     const [newUser] = await db
       .insert(users)
       .values({
         username: validatedData.username,
         displayName: validatedData.displayName,
         walletAddress: normalizedWalletAddress,
-        selfNullifier: selfNullifier,
         tokenId: validatedData.tokenId,
         isPublic: validatedData.isPublic,
         minBasePrice: validatedData.minBasePrice.toFixed(2),
