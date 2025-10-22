@@ -15,6 +15,7 @@ import {
   Clock,
   Wallet
 } from "lucide-react";
+import { SiGithub } from "react-icons/si";
 import ThemeToggle from "@/components/ThemeToggle";
 
 export default function Landing() {
@@ -233,6 +234,15 @@ export default function Landing() {
               <a href="#" className="hover:text-foreground">About</a>
               <a href="#" className="hover:text-foreground">Privacy</a>
               <a href="#" className="hover:text-foreground">Terms</a>
+              <a 
+                href="https://github.com/mbarbosa30/x4pp" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="hover:text-foreground"
+                data-testid="link-github"
+              >
+                <SiGithub className="h-4 w-4" />
+              </a>
             </div>
           </div>
         </div>
