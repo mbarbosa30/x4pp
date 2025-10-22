@@ -111,8 +111,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           method: 'POST',
           credentials: 'include',
         });
-        // Reload to update auth state
-        window.location.reload();
+        
+        // Clear React Query cache
+        queryClient.clear();
+        
+        // Navigate to home without reload
+        setLocation('/');
       } catch (logoutError) {
         console.error('Failed to logout:', logoutError);
       }
