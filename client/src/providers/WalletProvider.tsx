@@ -1,6 +1,8 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { getAccount, watchAccount, disconnect } from '@wagmi/core';
 import { wagmiConfig, modal } from "@/lib/reown-config";
+import { queryClient } from "@/lib/queryClient";
+import { useLocation } from "wouter";
 
 interface WalletContextType {
   address: string | undefined;
@@ -16,6 +18,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [address, setAddress] = useState<string | undefined>();
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [, setLocation] = useLocation();
 
   useEffect(() => {
     // Initialize account state
@@ -62,8 +65,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
               if (response.ok) {
                 const data = await response.json();
                 console.log('Auto-logged in as:', data.user.username);
-                // Redirect to dashboard
-                window.location.href = '/app';
+                
+                // Pre-populate the auth cache to prevent loading state
+                queryClient.setQueryData(['/api/auth/me'], data);
+                
+                // Navigate to dashboard (no page reload)
+                setLocation('/app');
               } else {
                 // User not registered, stay on current page
                 console.log('No account found for this wallet');

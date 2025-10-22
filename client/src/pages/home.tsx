@@ -15,7 +15,7 @@ import { Link } from "wouter";
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState("inbox");
-  const { user, isAuthenticated, isLoading: isLoadingAuth } = useAuth();
+  const { user, isAuthenticated, isCheckingAuth } = useAuth();
   const { disconnect } = useWallet();
   const { toast } = useToast();
 
@@ -46,8 +46,8 @@ export default function Home() {
     logoutMutation.mutate();
   };
 
-  // Show loading state while checking authentication OR if data is still loading
-  if (isLoadingAuth || (isAuthenticated && !user)) {
+  // Show loading state while actively checking auth (prevents flicker during background refetch)
+  if (isCheckingAuth) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-muted-foreground">Loading...</div>
@@ -55,8 +55,8 @@ export default function Home() {
     );
   }
 
-  // Show login prompt ONLY if we're sure they're not authenticated (not loading and no user)
-  if (!isLoadingAuth && !isAuthenticated && !user) {
+  // Show login prompt ONLY if we're done checking AND not authenticated
+  if (!isCheckingAuth && (!isAuthenticated || !user)) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <Card className="p-8 max-w-md w-full text-center space-y-4">
@@ -76,6 +76,9 @@ export default function Home() {
       </div>
     );
   }
+
+  // At this point we're guaranteed to have a user (TypeScript safety)
+  if (!user) return null;
 
   return (
     <div className="min-h-screen bg-background">

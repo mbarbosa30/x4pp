@@ -14,7 +14,7 @@ interface AuthResponse {
 }
 
 export function useAuth() {
-  const { data, isLoading, error } = useQuery<AuthResponse | null>({
+  const { data, isLoading, isFetching, status, fetchStatus } = useQuery<AuthResponse | null>({
     queryKey: ["/api/auth/me"],
     retry: false,
     staleTime: 0, // Always refetch
@@ -43,6 +43,10 @@ export function useAuth() {
     },
   });
 
+  // Critical: Check if we're actively fetching auth data
+  // This prevents showing "not authenticated" while a background refetch is in progress
+  const isCheckingAuth = status === 'pending' || fetchStatus !== 'idle';
+
   const loginMutation = useMutation({
     mutationFn: async (username: string) => {
       const response = await apiRequest("POST", "/api/auth/login", { username });
@@ -66,6 +70,7 @@ export function useAuth() {
   return {
     user: data?.user || null,
     isLoading,
+    isCheckingAuth, // Use this instead of isLoading to prevent flicker
     isAuthenticated: !!data?.user,
     login: loginMutation.mutate,
     logout: logoutMutation.mutate,
