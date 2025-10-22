@@ -44,6 +44,13 @@ export default function ComposeMessage({ isVerified, onSend, initialRecipient }:
   const [priceGuide, setPriceGuide] = useState<PriceGuide | null>(null);
   const [isLoadingPriceGuide, setIsLoadingPriceGuide] = useState(false);
 
+  // Update recipient when initialRecipient prop changes (e.g., from URL params)
+  useEffect(() => {
+    if (initialRecipient) {
+      setRecipient(initialRecipient);
+    }
+  }, [initialRecipient]);
+
   // Fetch price guide when recipient changes (only if wallet connected)
   useEffect(() => {
     if (!recipient || !isConnected) {
