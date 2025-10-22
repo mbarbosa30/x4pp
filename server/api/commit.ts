@@ -84,10 +84,13 @@ router.post("/", async (req, res) => {
       const nonceString = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       const nonce = `0x${createHash('sha256').update(nonceString).digest('hex')}`;
       
+      // Convert USD to smallest token units (e.g., 0.01 USD = 10000 for 6-decimal token)
+      const amountInSmallestUnits = Math.floor(bidAmount * Math.pow(10, paymentToken.decimals));
+      
       return res.status(402).json({
         error: "Payment required",
         paymentRequirements: [{
-          amount: bidAmount.toFixed(paymentToken.decimals),
+          amount: amountInSmallestUnits.toString(),
           network: {
             chainId: paymentToken.chainId,
           },
@@ -101,7 +104,7 @@ router.post("/", async (req, res) => {
         }],
         quote: {
           bidUsd: bidAmount,
-          price: bidAmount.toFixed(paymentToken.decimals),
+          price: amountInSmallestUnits.toString(),
           tokenSymbol: paymentToken.symbol,
         },
       });
@@ -132,10 +135,13 @@ router.post("/", async (req, res) => {
       const nonceString = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       const nonce = `0x${createHash('sha256').update(nonceString).digest('hex')}`;
       
+      // Convert USD to smallest token units
+      const amountInSmallestUnits = Math.floor(bidAmount * Math.pow(10, paymentToken.decimals));
+      
       return res.status(402).json({ 
         error: "Payment verification failed",
         paymentRequirements: [{
-          amount: bidAmount.toFixed(paymentToken.decimals),
+          amount: amountInSmallestUnits.toString(),
           network: {
             chainId: paymentToken.chainId,
           },
@@ -149,7 +155,7 @@ router.post("/", async (req, res) => {
         }],
         quote: {
           bidUsd: bidAmount,
-          price: bidAmount.toFixed(paymentToken.decimals),
+          price: amountInSmallestUnits.toString(),
           tokenSymbol: paymentToken.symbol,
         },
       });
