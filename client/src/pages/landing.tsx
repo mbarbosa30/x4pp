@@ -29,7 +29,7 @@ export default function Landing() {
           </div>
           <div className="flex items-center gap-3">
             <ThemeToggle />
-            <Link href="/app">
+            <Link href="/register">
               <Button variant="outline" data-testid="button-login">
                 Sign In
               </Button>
