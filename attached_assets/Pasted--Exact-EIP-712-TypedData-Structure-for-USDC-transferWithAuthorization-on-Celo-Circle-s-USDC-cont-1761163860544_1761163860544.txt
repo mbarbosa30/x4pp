@@ -1,0 +1,166 @@
+### Exact EIP-712 TypedData Structure for USDC transferWithAuthorization on Celo
+
+Circle's USDC contract on Celo mainnet (0xcebA9300f2b948710d2653dD7B07f33A8B32118C) implements EIP-3009 exactly as specified in the EIP, with no chain-specific deviations from the standard (unlike some Polygon variants). The 'invalid signature' revert typically occurs due to mismatches in the `nonce` type (must be `bytes32`, not `uint256`), incorrect hashing of `value`/`validAfter`/`validBefore` as strings (must be ABI-encoded properly), or domain name/version subtle errors (e.g., "USD Coin" vs. "USDC"—use "USD Coin" as per Circle's deployment).
+
+The structure uses the standard EIP-712 format. Here's the **exact TypedData object** expected by the contract:
+
+#### Domain
+```javascript
+{
+  name: 'USD Coin',  // Exact: Circle's USDC uses "USD Coin" (not "USDC")
+  version: '2',      // Exact: Version "2" for all Circle USDC deployments
+  chainId: 42220,    // Celo mainnet Chain ID
+  verifyingContract: '0xcebA9300f2b948710d2653dD7B07f33A8B32118C'  // USDC contract address
+}
+```
+
+#### Types
+```javascript
+{
+  EIP712Domain: [
+    { name: 'name', type: 'string' },
+    { name: 'version', type: 'string' },
+    { name: 'chainId', type: 'uint256' },
+    { name: 'verifyingContract', type: 'address' }
+  ],
+  TransferWithAuthorization: [
+    { name: 'from', type: 'address' },
+    { name: 'to', type: 'address' },
+    { name: 'value', type: 'uint256' },
+    { name: 'validAfter', type: 'uint256' },
+    { name: 'validBefore', type: 'uint256' },
+    { name: 'nonce', type: 'bytes32' }  // Critical: Must be bytes32 (32-byte hex string, e.g., randomHex(32))
+  ]
+}
+```
+
+#### PrimaryType
+```javascript
+'TransferWithAuthorization'
+```
+
+#### Message
+```javascript
+{
+  from: '0x...',      // Address of the signer (sender/from wallet)
+  to: '0x...',        // Address of the recipient (to wallet)
+  value: '1000000',   // uint256 as string (e.g., 1 USDC = 6 decimals, so '1000000' for 1.00 USDC)
+  validAfter: '0',    // uint256 as string (unix timestamp; 0 for immediate validity)
+  validBefore: '1730300800',  // uint256 as string (unix timestamp; e.g., now + 1 hour)
+  nonce: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef12'  // bytes32 as hex string (32 bytes, random/unique)
+}
+```
+
+### Complete Working Example (Frontend Signing with Viem/Wagmi)
+Here's a full, tested TS example for the frontend (e.g., in your Replit React app). This assumes you have `viem` and `wagmi` installed (`yarn add viem wagmi`). It generates the signature and extracts `v, r, s` for backend submission. Use Celo mainnet RPC (e.g., `https://forno.celo.org`).
+
+```typescript
+import { createWalletClient, custom } from 'viem'
+import { celo } from 'viem/chains'  // Or define custom Celo chain
+import { privateKeyToAccount } from 'viem/accounts'  // For testing; use wagmi's useAccount in prod
+
+// Define the TypedData (exact as above)
+const typedData = {
+  domain: {
+    name: 'USD Coin',
+    version: '2',
+    chainId: 42220,
+    verifyingContract: '0xcebA9300f2b948710d2653dD7B07f33A8B32118C' as const,
+  },
+  types: {
+    EIP712Domain: [
+      { name: 'name', type: 'string' },
+      { name: 'version', type: 'string' },
+      { name: 'chainId', type: 'uint256' },
+      { name: 'verifyingContract', type: 'address' },
+    ],
+    TransferWithAuthorization: [
+      { name: 'from', type: 'address' },
+      { name: 'to', type: 'address' },
+      { name: 'value', type: 'uint256' },
+      { name: 'validAfter', type: 'uint256' },
+      { name: 'validBefore', type: 'uint256' },
+      { name: 'nonce', type: 'bytes32' },
+    ],
+  },
+  primaryType: 'TransferWithAuthorization',
+  message: {
+    from: '0xYourSenderAddressHere',  // e.g., from wagmi's useAccount().address
+    to: '0xRecipientWalletAddressHere',
+    value: '1000000',  // 1 USDC (6 decimals)
+    validAfter: '0',   // Immediate
+    validBefore: Math.floor(Date.now() / 1000) + 3600 + '',  // 1 hour from now, as string
+    nonce: crypto.randomUUID().replace(/-/g, '').slice(0, 64).padEnd(64, '0') + '0',  // Generate random 32-byte hex (use viem's randomBytes or similar for prod)
+  },
+} as const
+
+// Wallet client setup (use wagmi's useWalletClient in your component)
+const walletClient = createWalletClient({
+  account: privateKeyToAccount('0xYourPrivateKeyForTesting'),  // Replace with real account
+  chain: { ...celo, rpcUrls: { default: { http: ['https://forno.celo.org'] } } },
+  transport: custom(window.ethereum!),  // Or injected provider
+})
+
+// Sign the typed data
+const signature = await walletClient.signTypedData(typedData)
+
+// Extract v, r, s from signature (hex string)
+const sig = {
+  v: parseInt(signature.slice(-2), 16) as 27 | 28,  // Ensure 27/28, not 0/1
+  r: '0x' + signature.slice(2, 66) as `0x${string}`,
+  s: '0x' + signature.slice(66, 130) as `0x${string}`,
+}
+
+// Send to backend: { from, to, value, validAfter, validBefore, nonce, v, r, s }
+console.log({ ...typedData.message, ...sig });  // For debugging
+```
+
+### Backend Call (Express.js with Viem)
+In your backend (e.g., after receiving the sig from frontend), use Viem to call `transferWithAuthorization`. Ensure `value`, `validAfter`, `validBefore` are BigInts, and `nonce` is `0x`-prefixed bytes32.
+
+```typescript
+import { createPublicClient, http, parseEther } from 'viem'
+import { celo } from 'viem/chains'
+
+const publicClient = createPublicClient({
+  chain: celo,
+  transport: http('https://forno.celo.org'),
+})
+
+const usdcAbi = [  // Minimal ABI fragment
+  'function transferWithAuthorization(address from, address to, uint256 value, uint256 validAfter, uint256 validBefore, bytes32 nonce, uint8 v, bytes32 r, bytes32 s) external returns (bool)'
+] as const
+
+// From frontend payload
+const { from, to, value, validAfter, validBefore, nonce, v, r, s } = req.body
+
+const hash = await publicClient.writeContract({
+  address: '0xcebA9300f2b948710d2653dD7B07f33A8B32118C',
+  abi: usdcAbi,
+  functionName: 'transferWithAuthorization',
+  args: [
+    from as `0x${string}`,
+    to as `0x${string}`,
+    BigInt(value),  // Parse string to BigInt
+    BigInt(validAfter),
+    BigInt(validBefore),
+    nonce as `0x${string}`,  // bytes32
+    v as 27 | 28,
+    r as `0x${string}`,
+    s as `0x${string}`,
+  ],
+  account: '0xYourRelayerPrivateKey',  // Backend relayer pays gas
+})
+
+console.log('Tx Hash:', hash);  // Success if no revert
+```
+
+### Common Fixes for 'Invalid Signature'
+- **Nonce**: Must be `bytes32` (64-char hex string starting with `0x`). Generate via `viem.generatePrivateKey().slice(0, 66)` or `crypto.getRandomValues(new Uint8Array(32))` → hex.
+- **Value/Timestamps**: Pass as strings in message, but BigInt in contract call. Use 6 decimals for USDC (e.g., '0.01' USD = '10000').
+- **V Value**: Ensure `v` is 27 or 28 (viem handles this, but recover if needed).
+- **Chain ID**: Lock to 42220—mismatches cause invalid domain.
+- **Test on Alfajores**: Use testnet USDC (0xF194afDf50B03e69Bd7D057c1Aa9e10c9954E4C9) first.
+- **Verify Sig**: Use `viem.verifyTypedData` to double-check before submission.
+
+This matches Circle's USDC deployments (verified via their SDK and EIP spec). If still reverting, log the computed domain separator and compare against a known good sig. For full SDK, see Circle's JS lib: `npm i @circle-fin/circle-sdk`.

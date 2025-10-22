@@ -1,0 +1,244 @@
+Here’s the exact EIP-712 payload USDC (EIP-3009) expects for `transferWithAuthorization` on **Celo mainnet** plus a drop-in viem/wagmi example.
+
+---
+
+# 1) The exact EIP-712 Typed Data
+
+**Domain**
+
+```json
+{
+  "name": "USD Coin",
+  "version": "2",
+  "chainId": 42220,
+  "verifyingContract": "0xcebA9300f2b948710d2653dD7B07f33A8B32118C"
+}
+```
+
+**Types**
+
+```json
+{
+  "EIP712Domain": [
+    {"name":"name", "type":"string"},
+    {"name":"version", "type":"string"},
+    {"name":"chainId", "type":"uint256"},
+    {"name":"verifyingContract", "type":"address"}
+  ],
+  "TransferWithAuthorization": [
+    {"name":"from",        "type":"address"},
+    {"name":"to",          "type":"address"},
+    {"name":"value",       "type":"uint256"},
+    {"name":"validAfter",  "type":"uint256"},   // unix seconds, <= now
+    {"name":"validBefore", "type":"uint256"},   // unix seconds, > now
+    {"name":"nonce",       "type":"bytes32"}    // 32-byte random
+  ]
+}
+```
+
+**Primary type**
+
+```
+"TransferWithAuthorization"
+```
+
+**Message (example)**
+
+```json
+{
+  "from": "0xSENDER...",
+  "to": "0xRECEIVER...",
+  "value": "500000",           // 0.500000 USDC (USDC has 6 decimals)
+  "validAfter":  0,            // or Math.floor(Date.now()/1000)
+  "validBefore": 1737580800,   // some future unix time
+  "nonce": "0x0123...abcd"     // 32-byte hex, left-padded to 32 bytes
+}
+```
+
+> Notes:
+>
+> * USDC v2 uses **name = "USD Coin"** and **version = "2"** for EIP-712.
+> * On **Celo mainnet**, `chainId = 42220` and the USDC contract is **0xcebA…118C** (official Celo token list). ([docs.celo.org][1])
+> * This is the **standard EIP-3009** layout (domain has `chainId`, **not** `salt`; Polygon-bridged USDC is a known exception and uses a different domain—irrelevant for Celo). ([web3-ethereum-defi.readthedocs.io][2])
+> * The function you call on-chain is:
+>
+>   ```
+>   transferWithAuthorization(from, to, value, validAfter, validBefore, nonce, v, r, s)
+>   ```
+>
+>   (USDC implements EIP-3009 exactly.) ([GitHub][3])
+
+---
+
+# 2) Working viem/wagmi example
+
+### Frontend: build & sign the typed data
+
+```ts
+import { createWalletClient, custom, toHex, parseSignature } from 'viem'
+import { celo } from 'viem/chains'
+
+const USDC = '0xcebA9300f2b948710d2653dD7B07f33A8B32118C' // Celo mainnet
+const chain = celo
+const walletClient = createWalletClient({ chain, transport: custom(window.ethereum) })
+
+// helper: make a 32-byte nonce
+function randomNonce32(): `0x${string}` {
+  const bytes = crypto.getRandomValues(new Uint8Array(32))
+  return toHex(bytes) as `0x${string}`
+}
+
+export async function signTWA({
+  from, to, usdAmount, ttlSeconds = 24*60*60,
+}: { from:`0x${string}`, to:`0x${string}`, usdAmount:number, ttlSeconds?:number }) {
+
+  // USDC uses 6 decimals
+  const value = BigInt(Math.round(usdAmount * 1_000_000)) // microunits
+
+  const now = Math.floor(Date.now()/1000)
+  const validAfter  = 0 // or now
+  const validBefore = now + ttlSeconds
+  const nonce = randomNonce32()
+
+  const domain = {
+    name: 'USD Coin',
+    version: '2',
+    chainId: 42220,
+    verifyingContract: USDC as `0x${string}`,
+  }
+
+  const types = {
+    TransferWithAuthorization: [
+      { name: 'from',        type: 'address' },
+      { name: 'to',          type: 'address' },
+      { name: 'value',       type: 'uint256' },
+      { name: 'validAfter',  type: 'uint256' },
+      { name: 'validBefore', type: 'uint256' },
+      { name: 'nonce',       type: 'bytes32' },
+    ],
+  } as const
+
+  const message = { from, to, value, validAfter, validBefore, nonce }
+
+  // user must have `from` selected
+  const signature = await walletClient.signTypedData({
+    account: from,
+    domain, types,
+    primaryType: 'TransferWithAuthorization',
+    message,
+  })
+
+  // Split to v/r/s for the backend call
+  const { v, r, s } = parseSignature(signature)
+
+  return { domain, types, message, signature, v, r, s }
+}
+```
+
+### Backend: call `transferWithAuthorization`
+
+```ts
+import { createPublicClient, createWalletClient, http } from 'viem'
+import { celo } from 'viem/chains'
+import { Abi } from 'abitype'
+
+// Minimal USDC ABI fragment for EIP-3009
+const usdcAbi = [
+  {
+    "type":"function",
+    "name":"transferWithAuthorization",
+    "stateMutability":"nonpayable",
+    "inputs":[
+      {"name":"from","type":"address"},
+      {"name":"to","type":"address"},
+      {"name":"value","type":"uint256"},
+      {"name":"validAfter","type":"uint256"},
+      {"name":"validBefore","type":"uint256"},
+      {"name":"nonce","type":"bytes32"},
+      {"name":"v","type":"uint8"},
+      {"name":"r","type":"bytes32"},
+      {"name":"s","type":"bytes32"}
+    ],
+    "outputs":[]
+  },
+  {
+    "type":"function",
+    "name":"authorizationState",
+    "stateMutability":"view",
+    "inputs":[{"name":"authorizer","type":"address"},{"name":"nonce","type":"bytes32"}],
+    "outputs":[{"name":"","type":"uint8"}]
+  }
+] as const satisfies Abi
+
+const USDC = '0xcebA9300f2b948710d2653dD7B07f33A8B32118C' as const
+
+const publicClient = createPublicClient({ chain: celo, transport: http(process.env.CELO_RPC_URL!) })
+const relayer = createWalletClient({
+  chain: celo,
+  transport: http(process.env.CELO_RPC_URL!),
+  account: process.env.RELAYER_PK as `0x${string}`, // EOA that pays gas
+})
+
+export async function settleAuthorization(payload: {
+  from:`0x${string}`, to:`0x${string}`, value: bigint,
+  validAfter: bigint, validBefore: bigint, nonce:`0x${string}`,
+  v: number, r:`0x${string}`, s:`0x${string}`
+}) {
+  // Optional: pre-check not already used (0=Unused, 1=Used, 2=Canceled in USDC)
+  const state = await publicClient.readContract({
+    address: USDC,
+    abi: usdcAbi,
+    functionName: 'authorizationState',
+    args: [payload.from, payload.nonce],
+  })
+  if (Number(state) !== 0) throw new Error('authorization already used or canceled')
+
+  const hash = await relayer.writeContract({
+    address: USDC,
+    abi: usdcAbi,
+    functionName: 'transferWithAuthorization',
+    args: [
+      payload.from, payload.to, payload.value,
+      payload.validAfter, payload.validBefore, payload.nonce,
+      payload.v, payload.r, payload.s,
+    ],
+  })
+  return hash
+}
+```
+
+---
+
+## Common “invalid signature” gotchas (fix these first)
+
+1. **Nonce must be 32 bytes**
+   Provide a **left-padded 32-byte hex** (e.g., `0x00..0abc`). Random 16 bytes is **not** enough unless you pad to 32 bytes.
+
+2. **USDC decimals**
+   `value` is in **atomic units (6 decimals)**. `0.50 USDC` → `500000` (BigInt).
+
+3. **Domain mismatch**
+   Name **must** be `"USD Coin"` and version **must** be `"2"` for native USDC v2; wrong casing or `"USDC"` will invalidate. (Polygon’s bridged USDC uses a *different* domain shape—Celo native USDC uses the standard one with `chainId`.) ([web3-ethereum-defi.readthedocs.io][2])
+
+4. **From address must sign**
+   The **`from`** in the message must be the account that signs the typed data in the wallet.
+
+5. **Validity window**
+   Ensure `validAfter <= now` and `validBefore > now` at **execution** time; long SLAs are fine, but don’t let it expire before you call.
+
+6. **To address check**
+   Make sure your backend uses the **same `to`** that was included in the signed message (bind to the recipient’s wallet in DB).
+
+---
+
+### References
+
+* Celo mainnet token list confirming **USDC 0xcebA…118C**. ([docs.celo.org][1])
+* EIP-3009 / USDC v2 background and layout (standard typed-data fields, `TransferWithAuthorization` struct). ([GitHub][3])
+* Known domain differences on bridged variants (Polygon) vs native USDC (why “salt” shows up elsewhere, but **not** on Celo). ([web3-ethereum-defi.readthedocs.io][2])
+
+If you paste the snippets above (and ensure the six decimals + 32-byte nonce), `transferWithAuthorization` should stop reverting with `invalid signature`.
+
+[1]: https://docs.celo.org/tooling/contracts/token-contracts?utm_source=chatgpt.com "Token Contracts"
+[2]: https://web3-ethereum-defi.readthedocs.io/api/usdc/_autosummary_usdc/eth_defi.usdc.eip_3009.html?utm_source=chatgpt.com "EIP-3009 transferWithAuthorization() support for Python"
+[3]: https://github.com/ethereum/EIPs/issues/3010?utm_source=chatgpt.com "EIP-3009: \"Transfer With Authorization\" - ERC20 meta- ..."
