@@ -4,13 +4,15 @@
 
 x4pp is a peer-to-peer messaging application with an innovative "attention market" model where sending messages requires humanity verification and dynamic pricing. The app enables users to monetize their attention by setting prices for incoming messages, with built-in protections against spam through verification gates and surge pricing mechanisms.
 
-**Recent Updates (Oct 20, 2025):**
-- Rebranded to "x4pp" across all user-facing surfaces
-- Added comprehensive SEO optimization with Open Graph and Twitter Card meta tags
-- Implemented PWA manifest for installable app experience
-- Generated custom brand assets (app icon and social sharing card)
-- Added structured data (JSON-LD) for enhanced search engine understanding
-- Created sitemap.xml and robots.txt for better crawlability
+**Recent Updates (Oct 22, 2025):**
+- **Celo Blockchain Integration Complete**: Full USDC payment system on Celo mainnet
+  - Backend: Payment verification using EIP-3009 `transferWithAuthorization` for gasless transfers
+  - Backend: Auto-refund system executes real on-chain USDC refunds
+  - Frontend: Wallet connection with wagmi for Celo network
+  - Frontend: EIP-712 payment signature generation for USDC transfers
+  - Security: Fixed critical recipient-binding vulnerability preventing payment theft
+- Implemented x402 HTTP payment protocol with PaymentRequirements structure
+- Added wagmi/viem integration for Web3 wallet interactions
 
 Key features include:
 - **Proof-of-humanity gating**: Verified humans pay discounted rates; unverified users can still send but at higher prices
@@ -52,7 +54,7 @@ Preferred communication style: Simple, everyday language.
 **State Management:**
 - React Query for API data fetching and caching
 - Local component state for UI interactions
-- Planned wallet connection integration (currently mocked)
+- Wagmi wallet provider for Celo network connection and account management
 
 ### Backend Architecture
 
@@ -72,6 +74,7 @@ Preferred communication style: Simple, everyday language.
 **Core Services:**
 - **Reputation Engine** (`server/reputation.ts`): Calculates sender/recipient reputation using Wilson lower bound scoring with exponential decay (75-day half-life)
 - **Storage Layer** (`server/storage.ts`): In-memory storage implementation with interface for potential database backends
+- **Celo Payment Service** (`server/celo-payment.ts`): USDC contract interface, EIP-712 signature verification, on-chain payment settlement and refunds
 
 ### Data Storage
 
@@ -106,12 +109,14 @@ Preferred communication style: Simple, everyday language.
 6. **blocks**: User blocking relationships
    - Simple nullifier pair tracking
 
-**Payment Architecture:**
+**Payment Architecture (Celo USDC):**
 - Each user must configure a Celo wallet address (`walletAddress` field) to receive payments
-- Payment requirements are generated with recipient's wallet address as destination
-- Payments go directly to recipient's wallet (no escrow in MVP)
-- Payment verification includes recipient address matching
-- Auto-refunds execute from recipient's wallet (in production)
+- Payment requirements generated via x402 protocol with recipient wallet, amount, network details
+- Payments use EIP-3009 `transferWithAuthorization` for gasless USDC transfers on Celo mainnet
+- Payment verification validates EIP-712 signatures on-chain before message acceptance
+- Server validates recipient address matches database wallet (prevents payment theft)
+- Auto-refunds execute real on-chain USDC refunds with transaction hash tracking
+- Payments table tracks: sender, recipient, amount, nonce, signature, txHash, refundTxHash, status
 
 **Data Privacy:**
 - Uses Self nullifiers instead of traditional user IDs to prevent PII exposure
@@ -120,16 +125,15 @@ Preferred communication style: Simple, everyday language.
 
 ### Authentication and Authorization
 
-**Planned Integration:**
-- **Self-x402** for humanity verification ("verify once, pay instantly")
-- HTTP 402 payment flow for message sending
-- Wallet connection for USDC payments (Web3 integration via wagmi/viem)
-- Session-based authentication using connect-pg-simple
+**Implemented:**
+- **HTTP 402 payment protocol** for message sending with x402 PaymentRequirements structure
+- **Celo wallet connection** via wagmi with injected provider (MetaMask, etc.)
+- **EIP-712 signature generation** for USDC transfer authorization
+- Session-based authentication infrastructure using connect-pg-simple
 
-**Current State:**
-- Mocked wallet connection UI
-- Placeholder verification flows
-- Session infrastructure in place but not fully implemented
+**Planned:**
+- **Self Protocol verification** for humanity proofing (currently placeholder/demo mode)
+- Integration with Self-x402 facilitator for "verify once, pay instantly" flow
 
 ### Reputation System
 

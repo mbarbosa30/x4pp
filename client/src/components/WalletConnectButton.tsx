@@ -1,6 +1,7 @@
-import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Wallet, Check } from "lucide-react";
+import { Wallet, Check, Loader2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { useWallet } from "@/providers/WalletProvider";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -9,37 +10,69 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 export default function WalletConnectButton() {
-  const [connected, setConnected] = useState(false);
-  const [address, setAddress] = useState("");
+  const { address, isConnected, isConnecting, connect, disconnect } = useWallet();
+  const { toast } = useToast();
 
-  const connectWallet = (walletType: string) => {
-    console.log(`Connecting to ${walletType}...`);
-    // TODO: Implement actual wallet connection
-    setTimeout(() => {
-      setConnected(true);
-      setAddress("alice.eth");
-    }, 500);
+  const handleConnect = async () => {
+    try {
+      await connect();
+      toast({
+        title: "Wallet connected",
+        description: "Connected to Celo network",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Connection failed",
+        description: error.message || "Failed to connect wallet",
+        variant: "destructive",
+      });
+    }
   };
 
-  const disconnect = () => {
-    console.log("Disconnecting wallet...");
-    setConnected(false);
-    setAddress("");
+  const handleDisconnect = async () => {
+    try {
+      await disconnect();
+      toast({
+        title: "Wallet disconnected",
+        description: "You can reconnect anytime",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Disconnection failed",
+        description: error.message || "Failed to disconnect wallet",
+        variant: "destructive",
+      });
+    }
   };
 
-  if (connected) {
+  if (isConnecting) {
+    return (
+      <Button
+        variant="outline"
+        size="default"
+        disabled
+        data-testid="button-wallet-connecting"
+      >
+        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+        Connecting...
+      </Button>
+    );
+  }
+
+  if (isConnected && address) {
+    const shortAddress = `${address.slice(0, 6)}...${address.slice(-4)}`;
     return (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="outline" size="default" data-testid="button-wallet-connected">
             <div className="flex items-center gap-2">
-              <Wallet className="h-4 w-4" />
-              <span className="font-mono text-sm">{address}</span>
+              <Check className="h-4 w-4" />
+              <span className="font-mono text-sm">{shortAddress}</span>
             </div>
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuItem onClick={disconnect} data-testid="button-disconnect">
+          <DropdownMenuItem onClick={handleDisconnect} data-testid="button-disconnect">
             Disconnect
           </DropdownMenuItem>
         </DropdownMenuContent>
@@ -48,24 +81,14 @@ export default function WalletConnectButton() {
   }
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="default" size="default" data-testid="button-connect-wallet">
-          <Wallet className="h-4 w-4 mr-2" />
-          Connect Wallet
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={() => connectWallet("MetaMask")} data-testid="button-metamask">
-          MetaMask
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => connectWallet("WalletConnect")} data-testid="button-walletconnect">
-          WalletConnect
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => connectWallet("Coinbase Wallet")} data-testid="button-coinbase">
-          Coinbase Wallet
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <Button
+      variant="default"
+      size="default"
+      onClick={handleConnect}
+      data-testid="button-connect-wallet"
+    >
+      <Wallet className="h-4 w-4 mr-2" />
+      Connect Wallet
+    </Button>
   );
 }

@@ -8,6 +8,8 @@ import { Switch } from "@/components/ui/switch";
 import { Send, Shield, Wallet, TrendingUp } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
+import { useWallet } from "@/providers/WalletProvider";
+import { signTransferAuthorization, parseSignature } from "@/lib/eip-3009";
 
 interface ComposeMessageProps {
   isVerified: boolean;
@@ -20,6 +22,7 @@ export default function ComposeMessage({ isVerified, onSend }: ComposeMessagePro
   const [replyBounty, setReplyBounty] = useState(0);
   const [includeReplyBounty, setIncludeReplyBounty] = useState(false);
   const { toast } = useToast();
+  const { address: walletAddress, isConnected, connect } = useWallet();
   
   // x402 payment flow state
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -155,24 +158,61 @@ export default function ComposeMessage({ isVerified, onSend }: ComposeMessagePro
   const handlePayment = async () => {
     if (!paymentRequirements || !originalCommitPayload) return;
 
+    // Check wallet connection
+    if (!isConnected || !walletAddress) {
+      toast({
+        title: "Wallet not connected",
+        description: "Please connect your wallet first",
+        variant: "destructive",
+      });
+      try {
+        await connect();
+      } catch (error) {
+        return;
+      }
+      return;
+    }
+
     setIsPaying(true);
 
     try {
-      // Step 2: Mock payment execution (in production, use real wallet)
-      // Simulate payment processing delay
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Step 2: Sign EIP-712 payment authorization with real wallet
+      const amountInSmallestUnit = BigInt(Math.round(parseFloat(paymentRequirements.amount) * 1e6)); // USDC has 6 decimals
+      
+      const authParams = {
+        from: walletAddress as `0x${string}`,
+        to: paymentRequirements.recipient as `0x${string}`,
+        value: amountInSmallestUnit,
+        validAfter: BigInt(0), // Valid immediately
+        validBefore: BigInt(paymentRequirements.expiration),
+        nonce: paymentRequirements.nonce as `0x${string}`,
+      };
 
-      // Generate mock payment proof with all required fields
-      const mockPaymentProof = {
+      toast({
+        title: "Signing payment",
+        description: "Please approve the signature request in your wallet",
+      });
+
+      // Sign the authorization
+      const signatureHex = await signTransferAuthorization(authParams, walletAddress);
+
+      // Parse signature into v, r, s components (required by backend)
+      const parsedSig = parseSignature(signatureHex);
+
+      // Create payment proof
+      const paymentProof = {
         chainId: paymentRequirements.network.chainId,
         tokenAddress: paymentRequirements.asset.address,
         amount: paymentRequirements.amount,
-        sender: "0x" + Math.random().toString(16).substr(2, 40),
+        sender: walletAddress,
         recipient: paymentRequirements.recipient,
         nonce: paymentRequirements.nonce,
         expiration: paymentRequirements.expiration,
-        signature: "0xmock_signature",
-        txHash: "0xmock_tx_hash",
+        signature: signatureHex, // Full signature for reference
+        v: parsedSig.v,
+        r: parsedSig.r,
+        s: parsedSig.s,
+        txHash: null, // Will be set by backend after settlement
       };
 
       // Step 3: Retry commit with SAME payload and payment proof
@@ -181,7 +221,7 @@ export default function ComposeMessage({ isVerified, onSend }: ComposeMessagePro
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-PAYMENT": JSON.stringify(mockPaymentProof),
+          "X-PAYMENT": JSON.stringify(paymentProof),
         },
         body: JSON.stringify(originalCommitPayload),
       });
@@ -329,7 +369,7 @@ export default function ComposeMessage({ isVerified, onSend }: ComposeMessagePro
                   ) : (
                     <>
                       <Wallet className="h-4 w-4 mr-2" />
-                      Pay with Wallet (Demo)
+                      {isConnected ? "Sign & Send" : "Connect & Pay"}
                     </>
                   )}
                 </Button>
