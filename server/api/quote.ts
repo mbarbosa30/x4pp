@@ -13,17 +13,17 @@ const router = Router();
  */
 router.post("/", async (req, res) => {
   try {
-    const { recipientId, selfProof } = req.body;
+    const { recipientUsername, senderNullifier } = req.body;
 
-    if (!recipientId) {
-      return res.status(400).json({ error: "recipientId is required" });
+    if (!recipientUsername) {
+      return res.status(400).json({ error: "recipientUsername is required" });
     }
 
-    // Find recipient by username or nullifier
+    // Find recipient by username
     const [recipient] = await db
       .select()
       .from(users)
-      .where(eq(users.username, recipientId))
+      .where(eq(users.username, recipientUsername))
       .limit(1);
 
     if (!recipient) {
@@ -33,13 +33,21 @@ router.post("/", async (req, res) => {
     // Get current queue count (use recipient.id for consistent tracking)
     const queuedMessages = await getQueuedMessageCount(recipient.selfNullifier || recipient.id);
 
-    // Check if sender is verified human (simplified - in production, validate selfProof)
-    const isHuman = !!selfProof;
+    // Check if sender is verified human (in MVP, check if nullifier indicates verification)
+    // In production, validate actual Self proof
+    const isHuman = senderNullifier && senderNullifier.includes("verified");
 
     // Calculate price
     const quote = calculatePriceForUser(recipient, queuedMessages, isHuman);
 
-    res.json(quote);
+    // Return format that frontend expects
+    res.json({
+      priceUSD: parseFloat(quote.priceUSD),
+      priceUSDC: quote.priceUSD,
+      surgeMultiplier: quote.surge.multiplier,
+      humanDiscountApplied: quote.humanDiscountApplied,
+      surge: quote.surge,
+    });
   } catch (error) {
     console.error("Error generating quote:", error);
     res.status(500).json({ error: "Failed to generate quote" });

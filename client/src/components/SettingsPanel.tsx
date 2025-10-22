@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -13,29 +13,72 @@ import {
 } from "@/components/ui/select";
 import { Save, DollarSign } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+
+interface UserSettings {
+  basePrice: string;
+  surgeAlpha: string;
+  surgeK: string;
+  humanDiscountPct: string;
+  slotsPerWindow: number;
+  timeWindow: string;
+  slaHours: number;
+  walletAddress: string;
+}
 
 export default function SettingsPanel() {
   const [basePrice, setBasePrice] = useState(0.02);
-  const [surgeMultiplier, setSurgeMultiplier] = useState(2);
+  const [surgeAlpha, setSurgeAlpha] = useState(0.5);
+  const [surgeK, setSurgeK] = useState(5);
+  const [humanDiscountPct, setHumanDiscountPct] = useState(80);
   const [slotsPerWindow, setSlotsPerWindow] = useState(5);
   const [timeWindow, setTimeWindow] = useState("hour");
+  const [slaHours, setSlaHours] = useState(24);
+  const [walletAddress, setWalletAddress] = useState("");
   const { toast } = useToast();
 
+  // Load current user settings (mock for now)
+  useEffect(() => {
+    // TODO: Load from backend
+    // For now using default values
+  }, []);
+
+  const saveMutation = useMutation({
+    mutationFn: async (settings: Partial<UserSettings>) => {
+      // TODO: Wire up to backend API
+      console.log("Saving settings:", settings);
+      return { success: true };
+    },
+    onSuccess: () => {
+      toast({
+        title: "Settings saved",
+        description: "Your preferences have been updated",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to save settings",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleSave = () => {
-    console.log("Saving settings:", {
-      basePrice,
-      surgeMultiplier,
+    saveMutation.mutate({
+      basePrice: basePrice.toString(),
+      surgeAlpha: surgeAlpha.toString(),
+      surgeK: surgeK.toString(),
+      humanDiscountPct: humanDiscountPct.toString(),
       slotsPerWindow,
       timeWindow,
-    });
-
-    toast({
-      title: "Settings saved",
-      description: "Your preferences have been updated",
+      slaHours,
+      walletAddress,
     });
   };
 
-  const currentPrice = basePrice * surgeMultiplier;
+  const currentPrice = basePrice;
 
   return (
     <Card className="p-6">
@@ -64,27 +107,65 @@ export default function SettingsPanel() {
             </div>
 
             <div>
-              <Label htmlFor="surge">Surge Multiplier: {surgeMultiplier}x</Label>
+              <Label htmlFor="surge-alpha">Surge Sensitivity: {surgeAlpha.toFixed(1)}</Label>
               <div className="mt-3">
                 <Slider
-                  id="surge"
-                  min={1}
-                  max={10}
-                  step={0.5}
-                  value={[surgeMultiplier]}
-                  onValueChange={(value) => setSurgeMultiplier(value[0])}
+                  id="surge-alpha"
+                  min={0}
+                  max={1}
+                  step={0.1}
+                  value={[surgeAlpha]}
+                  onValueChange={(value) => setSurgeAlpha(value[0])}
                   className="mb-2"
-                  data-testid="slider-surge"
+                  data-testid="slider-surge-alpha"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Price increases when your inbox is busy
+                  How aggressively price increases with demand
+                </p>
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="surge-k">Surge Threshold: {surgeK}</Label>
+              <div className="mt-3">
+                <Slider
+                  id="surge-k"
+                  min={1}
+                  max={20}
+                  step={1}
+                  value={[surgeK]}
+                  onValueChange={(value) => setSurgeK(value[0])}
+                  className="mb-2"
+                  data-testid="slider-surge-k"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Queue messages before surge pricing kicks in
+                </p>
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="human-discount">Human Discount: {humanDiscountPct}%</Label>
+              <div className="mt-3">
+                <Slider
+                  id="human-discount"
+                  min={0}
+                  max={100}
+                  step={5}
+                  value={[humanDiscountPct]}
+                  onValueChange={(value) => setHumanDiscountPct(value[0])}
+                  className="mb-2"
+                  data-testid="slider-human-discount"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Discount for verified humans (via Self Protocol)
                 </p>
               </div>
             </div>
 
             <Card className="p-4 bg-price/5 border-price/20">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Current rate</span>
+                <span className="text-sm text-muted-foreground">Base rate</span>
                 <div className="flex items-center gap-1">
                   <DollarSign className="h-4 w-4 text-price" />
                   <span className="text-2xl font-bold tabular-nums text-price" data-testid="text-current-rate">
@@ -128,15 +209,57 @@ export default function SettingsPanel() {
               </Select>
             </div>
 
+            <div>
+              <Label htmlFor="sla-hours">SLA Hours</Label>
+              <Input
+                id="sla-hours"
+                type="number"
+                min="1"
+                max="168"
+                value={slaHours}
+                onChange={(e) => setSlaHours(parseInt(e.target.value) || 24)}
+                className="max-w-32 mt-2"
+                data-testid="input-sla-hours"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Hours before unopened messages get auto-refunded
+              </p>
+            </div>
+
             <p className="text-sm text-muted-foreground">
               Only the top {slotsPerWindow} highest-paying messages will reach your inbox
             </p>
           </div>
         </div>
 
-        <Button onClick={handleSave} className="w-full" size="lg" data-testid="button-save-settings">
+        <div>
+          <h3 className="text-lg font-semibold mb-4">Payment Wallet</h3>
+          <div>
+            <Label htmlFor="wallet">Celo Wallet Address</Label>
+            <Input
+              id="wallet"
+              type="text"
+              placeholder="0x..."
+              value={walletAddress}
+              onChange={(e) => setWalletAddress(e.target.value)}
+              className="mt-2 font-mono text-sm"
+              data-testid="input-wallet-address"
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Where you'll receive USDC payments
+            </p>
+          </div>
+        </div>
+
+        <Button 
+          onClick={handleSave} 
+          className="w-full" 
+          size="lg" 
+          data-testid="button-save-settings"
+          disabled={saveMutation.isPending}
+        >
           <Save className="h-4 w-4 mr-2" />
-          Save Settings
+          {saveMutation.isPending ? "Saving..." : "Save Settings"}
         </Button>
       </div>
     </Card>

@@ -15,6 +15,7 @@ export interface PriceQuote {
   surge: {
     utilization: number;
     floorUSD: string;
+    multiplier: number;
   };
   requiresProof: boolean;
 }
@@ -49,6 +50,7 @@ export function calculateSurgePrice(params: SurgePricingParams, isHuman: boolean
     surge: {
       utilization: parseFloat(utilization.toFixed(2)),
       floorUSD: floorPrice.toFixed(2),
+      multiplier: parseFloat(surgeFactor.toFixed(2)),
     },
     requiresProof: !isHuman,
   };

@@ -1,12 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Send, Shield, Wallet } from "lucide-react";
+import { Send, Shield, Wallet, TrendingUp } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { Badge } from "@/components/ui/badge";
 
 interface ComposeMessageProps {
   isVerified: boolean;
@@ -24,8 +25,50 @@ export default function ComposeMessage({ isVerified, onSend }: ComposeMessagePro
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [paymentRequirements, setPaymentRequirements] = useState<any>(null);
   const [isPaying, setIsPaying] = useState(false);
-  const [quote, setQuote] = useState<{ priceUSD: number; priceUSDC: string } | null>(null);
+  const [quote, setQuote] = useState<{ priceUSD: number; priceUSDC: string; surgeActive: boolean } | null>(null);
   const [originalCommitPayload, setOriginalCommitPayload] = useState<any>(null);
+  const [isLoadingQuote, setIsLoadingQuote] = useState(false);
+
+  // Fetch live price quote when recipient changes
+  useEffect(() => {
+    if (!recipient) {
+      setQuote(null);
+      return;
+    }
+
+    const fetchQuote = async () => {
+      setIsLoadingQuote(true);
+      try {
+        const response = await fetch("/api/quote", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            recipientUsername: recipient,
+            senderNullifier: isVerified ? "verified_sender" : "unverified_sender",
+          }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setQuote({
+            priceUSD: data.priceUSD,
+            priceUSDC: data.priceUSDC,
+            surgeActive: data.surgeMultiplier > 1.0,
+          });
+        } else {
+          setQuote(null);
+        }
+      } catch (error) {
+        console.error("Error fetching quote:", error);
+        setQuote(null);
+      } finally {
+        setIsLoadingQuote(false);
+      }
+    };
+
+    const debounceTimer = setTimeout(fetchQuote, 500);
+    return () => clearTimeout(debounceTimer);
+  }, [recipient, isVerified]);
 
   const handleSend = async () => {
     if (!recipient || !message) {
@@ -292,22 +335,36 @@ export default function ComposeMessage({ isVerified, onSend }: ComposeMessagePro
             </div>
           ) : (
             <div className="flex items-center justify-between">
-              <div>
-                <div className="text-sm text-muted-foreground mb-2">
-                  {quote ? "Final Price" : "Estimated Price"}
+              <div className="flex items-center gap-3">
+                <div>
+                  <div className="text-sm text-muted-foreground mb-2">
+                    Estimated Price
+                  </div>
+                  {isLoadingQuote ? (
+                    <div className="text-xs text-muted-foreground">Loading...</div>
+                  ) : quote ? (
+                    <div className="flex items-center gap-2">
+                      <div className="font-mono font-semibold">{quote.priceUSDC} USDC</div>
+                      {quote.surgeActive && (
+                        <Badge variant="outline" className="text-xs gap-1" data-testid="badge-surge">
+                          <TrendingUp className="h-3 w-3" />
+                          Surge
+                        </Badge>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-xs text-muted-foreground">Enter recipient to see price</div>
+                  )}
                 </div>
-                {quote && (
-                  <div className="font-mono font-semibold">{quote.priceUSDC} USDC</div>
-                )}
               </div>
               <Button 
                 size="lg" 
                 onClick={handleSend} 
-                disabled={isSubmitting}
+                disabled={isSubmitting || !recipient || !message}
                 data-testid="button-send"
               >
                 {isSubmitting ? (
-                  <>Getting Quote...</>
+                  <>Initiating...</>
                 ) : (
                   <>
                     <Send className="h-4 w-4 mr-2" />
