@@ -293,11 +293,12 @@ export async function settlePayment(payment: any): Promise<string> {
   // Parse the signature that was stored during commit
   const sig = JSON.parse(payment.signature);
   
-  // Reconstruct the ORIGINAL authorization (don't change validAfter/validBefore!)
+  // Reconstruct the ORIGINAL authorization using stored values
+  // CRITICAL: Use sig.value (smallest units) not payment.amount (decimal)
   const auth: PaymentAuthorization = {
     from: payment.sender as Address,
     to: payment.recipient as Address,
-    value: payment.amount,
+    value: sig.value, // Original smallest-unit value from authorization
     validAfter: sig.validAfter || 0,
     validBefore: sig.validBefore || Math.floor(Date.now() / 1000) + 3600,
     nonce: payment.nonce as Hex,
@@ -308,7 +309,10 @@ export async function settlePayment(payment: any): Promise<string> {
     },
   };
 
-  const result = await executeSettlement(auth, payment.tokenAddress, payment.decimals);
+  // Use stored token decimals (defaults to 6 for USDC)
+  const tokenDecimals = sig.tokenDecimals || 6;
+  
+  const result = await executePaymentSettlement(auth, payment.tokenAddress as Address, tokenDecimals);
   
   if (!result.success) {
     throw new Error(`Settlement failed: ${result.error}`);

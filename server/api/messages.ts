@@ -110,13 +110,14 @@ router.post("/:messageId/accept", async (req, res) => {
       return res.status(404).json({ error: "Payment not found" });
     }
 
-    if (payment.status !== "pending") {
+    // Check payment status (should be 'authorized' in deferred settlement model)
+    if (payment.status !== "authorized") {
       return res.status(400).json({ 
-        error: `Payment already ${payment.status}` 
+        error: `Payment cannot be settled - status is ${payment.status}` 
       });
     }
 
-    // Settle payment on-chain
+    // Execute deferred payment settlement on-chain (transferWithAuthorization)
     const settlementTxHash = await settlePayment(payment);
 
     // Update message status
@@ -210,14 +211,15 @@ router.post("/:messageId/decline", async (req, res) => {
       return res.status(404).json({ error: "Payment not found" });
     }
 
-    if (payment.status !== "pending") {
+    // Check payment status (should be 'authorized' in deferred settlement model)
+    if (payment.status !== "authorized") {
       return res.status(400).json({ 
-        error: `Payment already ${payment.status}` 
+        error: `Payment cannot be declined - status is ${payment.status}` 
       });
     }
 
-    // Refund payment on-chain
-    const refundTxHash = await refundPayment(payment, reason || "declined");
+    // In deferred settlement model: mark authorization as unused (no on-chain tx needed)
+    // Funds never left sender's wallet, so no refund transaction required
 
     // Update message status
     await db
@@ -225,24 +227,22 @@ router.post("/:messageId/decline", async (req, res) => {
       .set({
         status: "declined",
         declinedAt: new Date(),
-        refundedAt: new Date(),
         refundReason: reason || "declined",
       })
       .where(eq(messages.id, messageId));
 
-    // Update payment status
+    // Update payment status to unused (authorization not executed)
     await db
       .update(payments)
       .set({
-        status: "refunded",
-        refundTxHash,
+        status: "unused",
       })
       .where(eq(payments.id, payment.id));
 
     res.json({
       messageId,
       status: "declined",
-      refundTxHash,
+      note: "Authorization marked as unused (no on-chain transaction - funds remained in sender wallet)",
     });
   } catch (error) {
     console.error("Error declining message:", error);

@@ -100,7 +100,7 @@ export const payments = pgTable("payments", {
   recipient: text("recipient").notNull(),
   txHash: text("tx_hash"),
   refundTxHash: text("refund_tx_hash"),
-  status: text("status").notNull().default("pending"), // pending, settled, failed, refunded
+  status: text("status").notNull().default("authorized"), // authorized, settled, failed, refunded, unused
   nonce: text("nonce").notNull().unique(),
   signature: text("signature"),
   settledAt: timestamp("settled_at"),

@@ -62,15 +62,15 @@ async function processRefund(messageId: string, reason: string): Promise<void> {
       return;
     }
 
-    // Check if payment can be refunded (should be settled, not already refunded/failed)
-    if (payment.status === "refunded" || payment.status === "failed") {
+    // Check if payment can be marked as unused (should be authorized, not already processed)
+    if (payment.status === "unused" || payment.status === "settled" || payment.status === "failed") {
       console.log(`[Refunds] Payment already ${payment.status} for message ${messageId}`);
       return;
     }
 
-    // Execute on-chain refund
-    console.log(`[Refunds] Processing refund for message ${messageId}`);
-    const refundTxHash = await refundPayment(payment, reason);
+    // DEFERRED SETTLEMENT MODEL: Mark authorization as unused (no on-chain refund needed)
+    // Funds never left sender's wallet, so we just mark the authorization as expired/unused
+    console.log(`[Refunds] Marking authorization as unused for expired message ${messageId}`);
 
     // Update message status
     await db
@@ -82,12 +82,11 @@ async function processRefund(messageId: string, reason: string): Promise<void> {
       })
       .where(eq(messages.id, messageId));
 
-    // Update payment status
+    // Update payment status to unused (no on-chain transaction)
     await db
       .update(payments)
       .set({
-        status: "refunded",
-        refundTxHash,
+        status: "unused",
       })
       .where(eq(payments.id, payment.id));
 
@@ -95,7 +94,7 @@ async function processRefund(messageId: string, reason: string): Promise<void> {
     await logReputationEvent(message.senderNullifier, "refunded", messageId);
     await logReputationEvent(message.recipientNullifier, "refunded", messageId);
 
-    console.log(`[Refunds] Refund processed successfully for message ${messageId}, txHash: ${refundTxHash}`);
+    console.log(`[Refunds] Authorization marked as unused for expired message ${messageId} (no on-chain tx)`);
   } catch (error) {
     console.error(`[Refunds] Error processing refund for message ${messageId}:`, error);
   }

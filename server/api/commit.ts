@@ -180,26 +180,27 @@ router.post("/", async (req, res) => {
       })
       .returning();
 
-    // Store payment record as SETTLED (payment already executed on-chain)
-    // Store complete signature object with validAfter/validBefore for later refunds if needed
-    const signatureWithParams = JSON.stringify({
-      ...paymentProof.signature,
-      validAfter: paymentProof.validAfter || 0,
-      validBefore: paymentProof.validBefore || Math.floor(Date.now() / 1000) + 3600,
-    });
-    
+    // Store payment authorization (DEFERRED settlement - payment executes only on accept)
+    // Store complete authorization with all parameters needed for later settlement
     await db.insert(payments).values({
       messageId: newMessage.id,
       chainId: paymentProof.chainId || paymentToken.chainId,
       tokenAddress: paymentProof.tokenAddress || paymentToken.address,
-      amount: bidAmount.toFixed(paymentToken.decimals),
-      sender: paymentProof.sender || senderNullifier,
+      amount: (parseFloat(paymentProof.amount) / Math.pow(10, paymentToken.decimals)).toFixed(paymentToken.decimals), // Convert to decimal for storage
+      sender: paymentProof.sender,
       recipient: recipient.walletAddress,
-      txHash: paymentResult.txHash,
-      status: "settled", // Payment already settled on-chain
+      txHash: null, // Will be set when receiver accepts
+      status: "authorized", // Authorization verified, awaiting acceptance for settlement
       nonce: paymentProof.nonce,
-      signature: signatureWithParams,
-      settledAt: new Date(),
+      signature: JSON.stringify({
+        v: paymentProof.signature.v,
+        r: paymentProof.signature.r,
+        s: paymentProof.signature.s,
+        validAfter: paymentProof.validAfter || 0,
+        validBefore: paymentProof.validBefore || Math.floor(Date.now() / 1000) + 3600,
+        value: paymentProof.amount, // Store original smallest-unit value for settlement
+        tokenDecimals: paymentToken.decimals, // Store decimals for settlement
+      }),
     });
 
     // Log reputation event

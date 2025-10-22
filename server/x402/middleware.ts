@@ -91,7 +91,7 @@ export function generatePaymentRequirements(
   };
 }
 
-// Verify payment proof with real on-chain verification
+// Verify payment proof (EIP-712 signature verification only - deferred settlement)
 async function verifyPayment(
   proof: PaymentProof,
   expectedAmountUSD: number,
@@ -99,14 +99,14 @@ async function verifyPayment(
   expectedTokenAddress?: string,
   expectedChainId?: number,
   expectedTokenDecimals?: number
-): Promise<{ success: boolean; txHash?: string }> {
+): Promise<{ success: boolean }> {
   try {
-    console.log("[Payment Verification] Starting on-chain verification...");
+    console.log("[Payment Verification] Starting EIP-712 signature verification (deferred settlement)...");
     console.log("[Payment Verification] Proof:", JSON.stringify(proof, null, 2));
     console.log("[Payment Verification] Expected amount USD:", expectedAmountUSD);
 
-    // Import Celo payment service
-    const { verifyPaymentAuthorization, executePaymentSettlement } = await import("../celo-payment");
+    // Import Celo payment service for signature verification only
+    const { verifyPaymentAuthorization } = await import("../celo-payment");
 
     // Basic validation
     if (!proof.signature || !proof.nonce) {
@@ -218,17 +218,11 @@ async function verifyPayment(
       return { success: false };
     }
 
-    // Execute payment settlement on Celo blockchain
-    const settlement = await executePaymentSettlement(paymentAuth, tokenToVerify, tokenDecimals);
-    
-    if (!settlement.success) {
-      console.log("[Payment Verification] FAILED: Settlement execution failed:", settlement.error);
-      return { success: false };
-    }
-
-    console.log("[Payment Verification] SUCCESS: Payment verified and settled on-chain");
-    console.log("[Payment Verification] Transaction hash:", settlement.txHash);
-    return { success: true, txHash: settlement.txHash };
+    // DEFERRED SETTLEMENT: Do NOT execute on-chain here
+    // Payment authorization is verified and will be stored for later execution
+    // Settlement happens only when receiver accepts the message
+    console.log("[Payment Verification] SUCCESS: Payment authorization verified (deferred settlement)");
+    return { success: true };
   } catch (error) {
     console.error("Payment verification error:", error);
     return { success: false };
