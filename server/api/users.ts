@@ -88,6 +88,14 @@ router.post("/", async (req, res) => {
     req.session.userId = newUser.id;
     req.session.username = newUser.username;
 
+    // Save session before responding
+    await new Promise<void>((resolve, reject) => {
+      req.session.save((err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+
     res.status(201).json({
       success: true,
       user: {
