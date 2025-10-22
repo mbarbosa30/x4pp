@@ -20,7 +20,7 @@ interface PriceGuide {
   p25: number | null;
   median: number | null;
   p75: number | null;
-  minBasePrice: number;
+  minBaseUsd: number;
   sampleSize: number;
 }
 
@@ -57,11 +57,11 @@ export default function ComposeMessage({ isVerified, onSend }: ComposeMessagePro
           const data = await response.json();
           setPriceGuide(data);
           
-          // Set initial bid to median (or minBasePrice if no data)
+          // Set initial bid to median (or minBaseUsd if no data)
           if (data.median) {
             setBidAmount(data.median);
           } else {
-            setBidAmount(data.minBasePrice);
+            setBidAmount(data.minBaseUsd);
           }
         } else {
           setPriceGuide(null);
@@ -111,10 +111,10 @@ export default function ComposeMessage({ isVerified, onSend }: ComposeMessagePro
       return;
     }
 
-    if (bidAmount < priceGuide.minBasePrice) {
+    if (bidAmount < priceGuide.minBaseUsd) {
       toast({
         title: "Bid too low",
-        description: `Minimum bid is $${priceGuide.minBasePrice.toFixed(2)}`,
+        description: `Minimum bid is $${priceGuide.minBaseUsd.toFixed(2)}`,
         variant: "destructive",
       });
       return;
@@ -354,7 +354,7 @@ export default function ComposeMessage({ isVerified, onSend }: ComposeMessagePro
                   <div className="text-center p-2 bg-muted/50 rounded">
                     <div className="text-xs text-muted-foreground mb-1">Min</div>
                     <div className="font-mono font-semibold text-sm">
-                      ${priceGuide.minBasePrice.toFixed(2)}
+                      ${priceGuide.minBaseUsd.toFixed(2)}
                     </div>
                   </div>
                   {priceGuide.median !== null && (
@@ -389,9 +389,9 @@ export default function ComposeMessage({ isVerified, onSend }: ComposeMessagePro
                       id="bid-amount"
                       type="number"
                       step="0.01"
-                      min={priceGuide.minBasePrice}
+                      min={priceGuide.minBaseUsd}
                       value={bidAmount}
-                      onChange={(e) => setBidAmount(parseFloat(e.target.value) || priceGuide.minBasePrice)}
+                      onChange={(e) => setBidAmount(parseFloat(e.target.value) || priceGuide.minBaseUsd)}
                       className="max-w-32 font-mono"
                       data-testid="input-bid-amount"
                     />
@@ -399,7 +399,7 @@ export default function ComposeMessage({ isVerified, onSend }: ComposeMessagePro
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => setBidAmount(priceGuide.minBasePrice)}
+                        onClick={() => setBidAmount(priceGuide.minBaseUsd)}
                         data-testid="button-bid-min"
                         className="text-xs"
                       >
@@ -429,9 +429,9 @@ export default function ComposeMessage({ isVerified, onSend }: ComposeMessagePro
                       )}
                     </div>
                   </div>
-                  {bidAmount < priceGuide.minBasePrice && (
+                  {bidAmount < priceGuide.minBaseUsd && (
                     <div className="text-xs text-destructive mt-1">
-                      Below minimum bid of ${priceGuide.minBasePrice.toFixed(2)}
+                      Below minimum bid of ${priceGuide.minBaseUsd.toFixed(2)}
                     </div>
                   )}
                 </div>
