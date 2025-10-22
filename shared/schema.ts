@@ -107,15 +107,6 @@ export const payments = pgTable("payments", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
-export const messageQueue = pgTable("message_queue", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  messageId: varchar("message_id").notNull(),
-  recipientId: varchar("recipient_id").notNull(),
-  priority: decimal("priority", { precision: 10, scale: 4 }).notNull(),
-  slotExpiry: timestamp("slot_expiry").notNull(),
-  status: text("status").notNull().default("queued"), // queued, delivered, expired
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-});
 
 // Insert schemas
 export const insertTokenSchema = createInsertSchema(tokens).omit({
@@ -161,10 +152,6 @@ export const insertPaymentSchema = createInsertSchema(payments).omit({
   settledAt: true,
 });
 
-export const insertMessageQueueSchema = createInsertSchema(messageQueue).omit({
-  id: true,
-  createdAt: true,
-});
 
 // Types
 export type InsertToken = z.infer<typeof insertTokenSchema>;
@@ -190,5 +177,3 @@ export type ReputationScore = typeof reputationScores.$inferSelect;
 export type InsertPayment = z.infer<typeof insertPaymentSchema>;
 export type Payment = typeof payments.$inferSelect;
 
-export type InsertMessageQueue = z.infer<typeof insertMessageQueueSchema>;
-export type MessageQueue = typeof messageQueue.$inferSelect;
