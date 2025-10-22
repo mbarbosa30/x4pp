@@ -156,14 +156,29 @@ router.post("/commit", async (req, res) => {
       isVerifiedHuman,
     });
 
-    // Verify payment amount, expiration, and other details
-    const isValidPayment = await verifyPayment(paymentProof, pricing.priceUSD);
+    // In the simplified bid model, we just verify that the bid amount >= minimum base price
+    // The bid amount comes from the payment proof, not from dynamic pricing
+    const bidAmount = parseFloat(paymentProof.amount) / 1_000_000; // Convert from token units (6 decimals) to USD
+    
+    if (bidAmount < pricing.priceUSD) {
+      return res.status(400).json({
+        error: "Bid too low",
+        minimum: pricing.priceUSD,
+        received: bidAmount,
+      });
+    }
+
+    // Verify payment signature and details
+    const isValidPayment = await verifyPayment(paymentProof, bidAmount);
     if (!isValidPayment) {
       return res.status(400).json({
         error: "Payment verification failed",
         details: "Check server logs for details",
       });
     }
+
+    // Calculate expiry time based on recipient's SLA
+    const expiresAt = await calculateSlotExpiry(recipient.id);
 
     // Create message
     const [message] = await db
@@ -174,8 +189,9 @@ router.post("/commit", async (req, res) => {
         senderName: commitReq.senderName,
         senderEmail: commitReq.senderEmail,
         content: commitReq.content,
-        amount: pricing.priceUSD.toString(),
+        bidUsd: bidAmount.toString(),
         replyBounty: commitReq.replyBounty?.toString(),
+        expiresAt,
       })
       .returning();
 
@@ -193,26 +209,23 @@ router.post("/commit", async (req, res) => {
       messageId: message.id,
       chainId: CELO_CONFIG.chainId,
       tokenAddress: CELO_CONFIG.usdcAddress,
-      amount: pricing.priceUSD.toString(),
+      amount: bidAmount.toString(),
       sender: paymentProof.sender,
       recipient: recipient.walletAddress,
       nonce: paymentProof.nonce,
       signature: paymentProof.signature,
-      status: "settled", // For MVP, assume instant settlement
-      txHash: paymentProof.txHash,
-      settledAt: new Date(),
+      status: "pending", // Payment will be settled when recipient accepts
     });
 
     // Add to message queue with priority
-    const priority = await getPriorityScore(pricing.priceUSD);
-    const slotExpiry = await calculateSlotExpiry(recipient.id);
+    const priority = await getPriorityScore(bidAmount);
 
     await db.insert(messageQueue).values({
       messageId: message.id,
       recipientId: recipient.id,
       priority: priority.toString(),
-      slotExpiry,
-      status: "delivered",
+      slotExpiry: expiresAt,
+      status: "queued",
     });
 
     // Log reputation event
@@ -221,11 +234,11 @@ router.post("/commit", async (req, res) => {
     res.status(200).json({
       success: true,
       messageId: message.id,
-      status: "delivered",
-      expiresAt: slotExpiry.toISOString(),
+      status: "pending",
+      expiresAt: expiresAt.toISOString(),
       payment: {
-        status: "settled",
-        amount: pricing.priceUSD,
+        status: "pending",
+        amount: bidAmount,
       },
     });
   } catch (error) {

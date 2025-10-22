@@ -11,9 +11,9 @@ interface PricingContext {
 }
 
 export async function calculateDynamicPrice(context: PricingContext) {
-  const { recipientId, isVerifiedHuman, currentTime = new Date() } = context;
+  const { recipientId } = context;
 
-  // Get recipient's pricing settings
+  // Get recipient's minimum base price
   const [recipient] = await db
     .select()
     .from(users)
@@ -24,26 +24,17 @@ export async function calculateDynamicPrice(context: PricingContext) {
     throw new Error("Recipient not found");
   }
 
-  const basePrice = parseFloat(recipient.basePrice || "0.05");
-  const slotsPerWindow = recipient.slotsPerWindow || PRICING_CONFIG.defaultSlotsPerHour;
+  const minBasePrice = parseFloat(recipient.minBasePrice || "0.05");
 
-  // Calculate current utilization rate
-  const utilizationRate = await calculateUtilization(recipientId, slotsPerWindow, currentTime);
-
-  // Calculate final price with surge and human discount
-  const finalPrice = calculateMessagePrice(basePrice, utilizationRate, isVerifiedHuman);
-
-  // Calculate surge factor for transparency
-  const surgeFactor = 1 + PRICING_CONFIG.surgeAlpha * Math.pow(utilizationRate, PRICING_CONFIG.surgeK);
-  const humanDiscount = isVerifiedHuman ? PRICING_CONFIG.humanDiscountPercent : 0;
-
+  // Simple pricing: just return the minimum base price
+  // The sender's bid must be >= this amount
   return {
-    priceUSD: finalPrice,
-    basePrice,
-    surgeFactor,
-    utilizationRate,
-    humanDiscount,
-    slotsAvailable: Math.max(0, slotsPerWindow - Math.floor(utilizationRate * slotsPerWindow)),
+    priceUSD: minBasePrice,
+    basePrice: minBasePrice,
+    surgeFactor: 1,
+    utilizationRate: 0,
+    humanDiscount: 0,
+    slotsAvailable: 999,
   };
 }
 
@@ -96,21 +87,8 @@ export async function checkSlotAvailability(
   recipientId: string,
   currentTime: Date = new Date()
 ): Promise<boolean> {
-  const [recipient] = await db
-    .select()
-    .from(users)
-    .where(eq(users.id, recipientId))
-    .limit(1);
-
-  if (!recipient) {
-    return false;
-  }
-
-  const slotsPerWindow = recipient.slotsPerWindow || PRICING_CONFIG.defaultSlotsPerHour;
-  const utilizationRate = await calculateUtilization(recipientId, slotsPerWindow, currentTime);
-
-  // Check if there are available slots (utilization < 100%)
-  return utilizationRate < 1.0;
+  // In the simplified bid model, slots are always available
+  return true;
 }
 
 export async function getPriorityScore(messageAmount: number): Promise<number> {
