@@ -13,6 +13,7 @@ import openRoutes from "./api/open";
 import reputationRoutes from "./api/reputation";
 import adminRoutes from "./api/admin";
 import profileRoutes from "./api/profile";
+import usersRoutes from "./api/users";
 import { startRefundMonitor } from "./refunds";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -38,6 +39,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Mount profile routes
   app.use("/api/profile", profileRoutes);
+  
+  // Mount user registration routes
+  app.use("/api/users", usersRoutes);
   
   // Start auto-refund monitor
   startRefundMonitor();

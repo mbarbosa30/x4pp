@@ -9,6 +9,7 @@ import Home from "@/pages/home";
 import PublicMessage from "@/pages/public-message";
 import AdminDashboard from "@/pages/admin/dashboard";
 import Profile from "@/pages/profile";
+import Register from "@/pages/register";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -16,6 +17,7 @@ function Router() {
     <Switch>
       <Route path="/" component={Landing} />
       <Route path="/app" component={Home} />
+      <Route path="/register" component={Register} />
       <Route path="/profile" component={Profile} />
       <Route path="/admin" component={AdminDashboard} />
       <Route path="/@:username" component={PublicMessage} />

@@ -56,21 +56,12 @@ export default function Landing() {
           </p>
           
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-6">
-            <div className="flex w-full sm:w-auto gap-2">
-              <Input
-                placeholder="Choose your username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="max-w-xs"
-                data-testid="input-username"
-              />
-              <Link href="/app">
-                <Button size="lg" data-testid="button-get-started">
-                  Get Started
-                  <ArrowRight className="h-4 w-4 ml-2" />
-                </Button>
-              </Link>
-            </div>
+            <Link href="/register">
+              <Button size="lg" data-testid="button-get-started">
+                Create Account
+                <ArrowRight className="h-4 w-4 ml-2" />
+              </Button>
+            </Link>
           </div>
 
           <p className="text-sm text-muted-foreground">
