@@ -171,23 +171,23 @@ export default function Landing() {
               <div className="space-y-4">
                 <div className="flex items-center justify-between pb-4 border-b">
                   <span className="text-sm text-muted-foreground">Your shareable link</span>
-                  <Badge variant="outline">Premium</Badge>
+                  <Badge variant="outline">Active</Badge>
                 </div>
                 <div className="font-mono text-sm text-primary bg-background p-3 rounded border">
                   x4pp.app/@yourname
                 </div>
                 <div className="space-y-3 pt-4">
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Base price</span>
+                    <span className="text-muted-foreground">Minimum base price</span>
                     <span className="font-semibold">$0.05 USDC</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Surge multiplier</span>
-                    <span className="font-semibold">2.5x</span>
+                    <span className="text-muted-foreground">Response SLA</span>
+                    <span className="font-semibold">24 hours</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Slots per hour</span>
-                    <span className="font-semibold">5 messages</span>
+                    <span className="text-muted-foreground">Payment method</span>
+                    <span className="font-semibold">USDC on Celo</span>
                   </div>
                 </div>
               </div>
