@@ -29,14 +29,19 @@ export default function Landing() {
 
   const checkProfileMutation = useMutation({
     mutationFn: async (address: string) => {
+      console.log("Attempting login with address:", address);
       const response = await apiRequest("POST", "/api/auth/login", { walletAddress: address });
-      return await response.json();
+      const data = await response.json();
+      console.log("Login response:", data);
+      return data;
     },
     onSuccess: (data) => {
+      console.log("Login successful, redirecting to /app");
       // User has a profile, redirect to dashboard
       window.location.href = "/app";
     },
-    onError: () => {
+    onError: (error: any) => {
+      console.log("Login failed, redirecting to /register. Error:", error);
       // User doesn't have a profile, redirect to registration
       toast({
         title: "No account found",
