@@ -4,6 +4,7 @@ import { users, messages, payments, tokens } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { verifyPayment } from "../x402/middleware";
 import { logReputationEvent } from "../reputation";
+import { parseUnits, formatUnits } from "viem";
 
 const router = Router();
 
@@ -84,8 +85,8 @@ router.post("/", async (req, res) => {
       const nonceString = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       const nonce = `0x${createHash('sha256').update(nonceString).digest('hex')}`;
       
-      // Convert USD to smallest token units (e.g., 0.01 USD = 10000 for 6-decimal token)
-      const amountInSmallestUnits = Math.floor(bidAmount * Math.pow(10, paymentToken.decimals));
+      // Convert USD to smallest token units using bigint-safe parseUnits
+      const amountInSmallestUnits = parseUnits(bidAmount.toFixed(paymentToken.decimals), paymentToken.decimals);
       
       return res.status(402).json({
         error: "Payment required",
@@ -135,8 +136,8 @@ router.post("/", async (req, res) => {
       const nonceString = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       const nonce = `0x${createHash('sha256').update(nonceString).digest('hex')}`;
       
-      // Convert USD to smallest token units
-      const amountInSmallestUnits = Math.floor(bidAmount * Math.pow(10, paymentToken.decimals));
+      // Convert USD to smallest token units using bigint-safe parseUnits
+      const amountInSmallestUnits = parseUnits(bidAmount.toFixed(paymentToken.decimals), paymentToken.decimals);
       
       return res.status(402).json({ 
         error: "Payment verification failed",
@@ -186,7 +187,7 @@ router.post("/", async (req, res) => {
       messageId: newMessage.id,
       chainId: paymentProof.chainId || paymentToken.chainId,
       tokenAddress: paymentProof.tokenAddress || paymentToken.address,
-      amount: (parseFloat(paymentProof.amount) / Math.pow(10, paymentToken.decimals)).toFixed(paymentToken.decimals), // Convert to decimal for storage
+      amount: formatUnits(BigInt(paymentProof.amount), paymentToken.decimals), // Convert to decimal using formatUnits
       sender: paymentProof.sender,
       recipient: recipient.walletAddress,
       txHash: null, // Will be set when receiver accepts
