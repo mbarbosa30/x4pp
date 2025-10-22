@@ -2,6 +2,7 @@ import express from "express";
 import { db } from "../db";
 import { users, messages } from "@shared/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
+import { PLATFORM_DEFAULT_MIN_BID } from "@shared/constants";
 
 const router = express.Router();
 
@@ -50,32 +51,74 @@ function calculatePercentiles(bids: number[], minBasePrice: number): {
 }
 
 /**
- * GET /api/price-guide/:username
+ * GET /api/price-guide/:identifier
  * Returns pricing guidance for a recipient
+ * 
+ * @param identifier - Can be either:
+ *   - username (e.g., "alice")
+ *   - wallet address (e.g., "0x1234...5678")
+ * 
+ * For unregistered wallet addresses, returns platform default minimum bid
+ * For registered users, returns their configured minimum bid + market data
  */
-router.get("/:username", async (req, res) => {
+router.get("/:identifier", async (req, res) => {
   try {
-    const { username } = req.params;
+    const { identifier } = req.params;
     
-    // Get recipient user
-    const [recipient] = await db
-      .select({
-        id: users.id,
-        username: users.username,
-        minBasePrice: users.minBasePrice,
-        selfNullifier: users.selfNullifier,
-      })
-      .from(users)
-      .where(eq(users.username, username))
-      .limit(1);
+    // Check if identifier is a wallet address (starts with 0x and is 42 chars)
+    const isWalletAddress = identifier.startsWith('0x') && identifier.length === 42;
     
-    if (!recipient) {
-      return res.status(404).json({ error: "User not found" });
+    let recipientWallet: string;
+    let minBasePriceNum: number;
+    let username: string | null = null;
+    
+    if (isWalletAddress) {
+      // Direct wallet address lookup
+      recipientWallet = identifier.toLowerCase();
+      
+      // Try to find registered user with this wallet
+      const [user] = await db
+        .select({
+          id: users.id,
+          username: users.username,
+          minBasePrice: users.minBasePrice,
+          walletAddress: users.walletAddress,
+        })
+        .from(users)
+        .where(eq(users.walletAddress, recipientWallet))
+        .limit(1);
+      
+      if (user) {
+        // Registered user - use their pricing
+        username = user.username;
+        minBasePriceNum = parseFloat(user.minBasePrice || "0.05");
+      } else {
+        // Unregistered wallet - use platform default
+        minBasePriceNum = PLATFORM_DEFAULT_MIN_BID;
+      }
+    } else {
+      // Username lookup
+      const [user] = await db
+        .select({
+          id: users.id,
+          username: users.username,
+          minBasePrice: users.minBasePrice,
+          walletAddress: users.walletAddress,
+        })
+        .from(users)
+        .where(eq(users.username, identifier))
+        .limit(1);
+      
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      
+      username = user.username;
+      recipientWallet = user.walletAddress.toLowerCase();
+      minBasePriceNum = parseFloat(user.minBasePrice || "0.05");
     }
     
-    const minBasePriceNum = parseFloat(recipient.minBasePrice || "0.05");
-    
-    // Get pending bids for this recipient
+    // Get pending bids for this recipient wallet
     const pendingBids = await db
       .select({
         bidUsd: messages.bidUsd,
@@ -83,7 +126,7 @@ router.get("/:username", async (req, res) => {
       .from(messages)
       .where(
         and(
-          eq(messages.recipientNullifier, recipient.selfNullifier || ""),
+          eq(messages.recipientWallet, recipientWallet),
           eq(messages.status, "pending")
         )
       );
@@ -102,7 +145,7 @@ router.get("/:username", async (req, res) => {
         .from(messages)
         .where(
           and(
-            eq(messages.recipientNullifier, recipient.selfNullifier || ""),
+            eq(messages.recipientWallet, recipientWallet),
             eq(messages.status, "accepted")
           )
         )
@@ -126,6 +169,9 @@ router.get("/:username", async (req, res) => {
       median: stats.median,
       p75: stats.p75,
       sampleSize: stats.sampleSize,
+      recipientWallet,
+      username,
+      isRegistered: username !== null,
     });
   } catch (error) {
     console.error("Error calculating price guide:", error);
