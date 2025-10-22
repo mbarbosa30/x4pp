@@ -67,6 +67,10 @@ export async function signTransferAuthorization(
     nonce: params.nonce,
   };
 
+  console.log('[EIP-712 Signing] Domain:', domain);
+  console.log('[EIP-712 Signing] Message:', message);
+  console.log('[EIP-712 Signing] Types:', types);
+
   try {
     // Use ethereum provider to sign typed data
     if (!window.ethereum) {
