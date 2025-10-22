@@ -151,10 +151,15 @@ async function verifyPayment(
       return false;
     }
 
-    // Verify expiration
+    // Verify expiration (use validBefore if expiration not present)
+    const expirationTimestamp = proof.expiration || proof.validBefore;
+    // Convert to seconds if in milliseconds
+    const expirationSeconds = expirationTimestamp > 10000000000 
+      ? Math.floor(expirationTimestamp / 1000) 
+      : expirationTimestamp;
     const now = Math.floor(Date.now() / 1000);
-    console.log(`[Payment Verification] Expiration check: proof=${proof.expiration}, now=${now}, valid=${proof.expiration >= now}`);
-    if (proof.expiration < now) {
+    console.log(`[Payment Verification] Expiration check: proof=${expirationSeconds}, now=${now}, valid=${expirationSeconds >= now}`);
+    if (expirationSeconds < now) {
       console.log("[Payment Verification] FAILED: Payment expired");
       return false;
     }
@@ -170,18 +175,30 @@ async function verifyPayment(
     }
 
     // Parse EIP-712 signature components (v, r, s)
-    // Signature format: "0x" + r (32 bytes) + s (32 bytes) + v (1 byte)
-    const sig = proof.signature.startsWith('0x') ? proof.signature.slice(2) : proof.signature;
-    const r = `0x${sig.slice(0, 64)}` as `0x${string}`;
-    const s = `0x${sig.slice(64, 128)}` as `0x${string}`;
-    const v = parseInt(sig.slice(128, 130), 16);
+    // Accept either hex string or object format
+    let v: number, r: `0x${string}`, s: `0x${string}`;
+    if (typeof proof.signature === 'object' && proof.signature.v !== undefined) {
+      // Signature is already an object with v, r, s
+      v = proof.signature.v;
+      r = proof.signature.r as `0x${string}`;
+      s = proof.signature.s as `0x${string}`;
+    } else if (typeof proof.signature === 'string') {
+      // Signature format: "0x" + r (32 bytes) + s (32 bytes) + v (1 byte)
+      const sig = proof.signature.startsWith('0x') ? proof.signature.slice(2) : proof.signature;
+      r = `0x${sig.slice(0, 64)}` as `0x${string}`;
+      s = `0x${sig.slice(64, 128)}` as `0x${string}`;
+      v = parseInt(sig.slice(128, 130), 16);
+    } else {
+      console.log("[Payment Verification] FAILED: Invalid signature format");
+      return false;
+    }
 
     const paymentAuth = {
       from: proof.sender as `0x${string}`,
       to: proof.recipient as `0x${string}`,
       value: proof.amount,
-      validAfter: 0, // Immediate validity
-      validBefore: proof.expiration,
+      validAfter: proof.validAfter || 0,
+      validBefore: expirationSeconds,
       nonce: proof.nonce as `0x${string}`,
       signature: { v, r, s },
     };
