@@ -147,6 +147,8 @@ export default function ComposeMessage({ isVerified, onSend }: ComposeMessagePro
       if (response.status === 402) {
         // Payment required - show payment UI
         const data = await response.json();
+        console.log("402 Response data:", data);
+        console.log("Payment requirements[0]:", data.paymentRequirements?.[0]);
         setPaymentRequirements(data.paymentRequirements[0]);
         
         toast({
@@ -213,6 +215,14 @@ export default function ComposeMessage({ isVerified, onSend }: ComposeMessagePro
 
     try {
       // Step 2: Sign EIP-712 payment authorization with real wallet
+      console.log("Payment requirements before BigInt:", paymentRequirements);
+      console.log("Amount value:", paymentRequirements.amount);
+      console.log("Amount type:", typeof paymentRequirements.amount);
+      
+      if (!paymentRequirements.amount) {
+        throw new Error("Payment amount is missing");
+      }
+      
       const amountInSmallestUnit = BigInt(paymentRequirements.amount);
       
       const authParams = {
