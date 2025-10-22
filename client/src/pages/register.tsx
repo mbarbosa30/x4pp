@@ -89,9 +89,12 @@ export default function Register() {
     onSuccess: (data: any) => {
       toast({
         title: "Account created!",
-        description: `Welcome @${data.user.username}! Your shareable link: ${data.user.shareableLink}`,
+        description: `Welcome @${data.user.username}!`,
       });
-      setTimeout(() => setLocation("/app"), 1500);
+      // Reload to ensure session is picked up properly
+      setTimeout(() => {
+        window.location.href = "/app";
+      }, 1000);
     },
     onError: (error: any) => {
       toast({
