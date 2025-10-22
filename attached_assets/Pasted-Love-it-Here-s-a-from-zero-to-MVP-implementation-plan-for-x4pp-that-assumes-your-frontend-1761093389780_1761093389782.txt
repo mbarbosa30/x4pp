@@ -1,0 +1,242 @@
+Love it. Here’s a **from-zero-to-MVP** implementation plan for **x4pp** that assumes your **frontend is already live** and focuses on wiring the backend, payments (x402), Self verification, pricing/queueing, refunds, and a minimal rep system—**on Celo**.
+
+I reference official docs for **x402** and **Self** so your team can move fast with the right APIs and flows. ([docs.cdp.coinbase.com][1])
+
+---
+
+# Phase 0 — Product scope lock (same day)
+
+**User story (MVP):**
+
+1. Sender composes → sees a **quote** (dynamic price; human discount if Self proof).
+2. Sender **verifies once** with Self or pays a higher “unverified” price.
+3. API replies **HTTP 402** with x402 payment instructions → wallet pays → client retries → message lands in recipient’s queue/slots.
+4. If **unopened** by SLA (e.g., 24h), sender **auto-refunded**.
+5. Basic **reputation facts** (open/reply rates) show on hover—keyed by Self **action nullifier**.
+
+---
+
+# Phase 1 — Repos, env & scaffolding (Day 1)
+
+## 1. Backends you’ll run
+
+* **x4pp-API** (your app logic): Next.js API routes or Express (your choice).
+* **x402 Facilitator** (service that verifies payment authorizations and settles USDC on Celo). Use x402 patterns; run the facilitator you control for Celo rails. ([docs.cdp.coinbase.com][1])
+
+## 2. Environment (Celo + USDC + Self)
+
+* `CELO_RPC_URL=https://forno.celo.org`
+* `CHAIN_ID=42220`
+* `USDC_ADDRESS=<Celo USDC contract>`
+* `FACILITATOR_URL=<your facilitator>`
+* `SELF_VERIFY_URL=<your /verify-self endpoint>`
+* `SLA_HOURS=24`
+
+> x402 is **HTTP-native** (402 → pay → retry) and chain-agnostic; we’ll default to **USDC on Celo** for sub-cent flows. ([docs.cdp.coinbase.com][1])
+
+---
+
+# Phase 2 — Contract for your frontend (Day 1)
+
+### A) Quote
+
+`POST /x4pp/quote`
+
+```json
+{ "recipientId":"r_123", "tags":["hiring"], "selfProof":"<opaque-or-null>" }
+```
+
+Response:
+
+```json
+{
+  "priceUSD":"0.12",
+  "humanDiscountApplied": true,
+  "surge": { "utilization": 0.65, "floorUSD":"0.10" },
+  "requiresProof": false
+}
+```
+
+### B) Commit + x402 handshake
+
+`POST /x4pp/commit`
+
+```json
+{ "recipientId":"r_123", "message":"<ciphertext or body>", "selfProof":"<optional>" }
+```
+
+* If unpaid → **HTTP 402** with **x402 PaymentRequirements** JSON (amount, token, facilitator URL). Client/wallet pays; then **retry** same request with `X-PAYMENT:` header from the facilitator. On success: `200 { "messageId":"m_abc" }`. ([docs.cdp.coinbase.com][1])
+
+### C) Recipient actions
+
+* `POST /x4pp/open` → `{ messageId }` → releases “open” earnings.
+* `POST /x4pp/feedback` → `{ messageId, rating: -1|0|1 }`.
+* `GET /x4pp/inbox?recipientId=…` → queue top-N by score (price × weights).
+
+### D) Reputation (read-only)
+
+* `GET /x4pp/reputation/:nullifier` → `{ score, facts:[] }`.
+
+---
+
+# Phase 3 — Self verification hook (Day 2)
+
+### 1) API: `/verify-self`
+
+* Accept the **Self proof** from the client (after scan in the Self mobile app).
+* Verify with Self backend SDK / verifier; return only:
+
+```json
+{ "actionNullifier":"an_xxx", "isHuman":true, "policies":{"age_ok":true,"ofac_ok":true,"country_ok":true}, "freshnessDays": 12 }
+```
+
+* **Store:** `actionNullifier`, timestamps. **Never** store PII.
+* **Cache client-side** for ~90 days to avoid rescan. (Self docs: ZK proof of age/country/OFAC + nullifier.) ([docs.self.xyz][2])
+
+### 2) Pricing tiers
+
+* If `isHuman==true` → apply **human discount** (e.g., 90% off).
+* If not → charge full “unverified” floor.
+
+---
+
+# Phase 4 — Dynamic pricing & slots (Day 2–3)
+
+### 1) Recipient settings
+
+```
+basePriceUSD, slotsPerHour, surgeAlpha, surgeK, humanDiscountPct, SLA_hours
+```
+
+### 2) Surge floor (posted price MVP)
+
+```
+utilization = queued / slots
+floor = basePriceUSD * (1 + surgeAlpha * utilization^surgeK)
+price = floor * (isHuman ? 1 - humanDiscountPct : 1)
+```
+
+### 3) Queue & admission
+
+* Maintain a rolling per-recipient window (e.g., slots/hour).
+* Every minute, admit items until slot capacity is met; **score = price × weights** (weights: topic match, prior good interactions).
+* Messages carry `expires_at = sent_at + SLA_hours`.
+
+---
+
+# Phase 5 — x402 payment flow (Day 3)
+
+### 1) On `/commit` (unpaid)
+
+* Respond **HTTP 402** with **PaymentRequirements** (amount in **USDC on Celo**, payee, nonce, facilitator endpoint).
+* Client/wallet signs **EIP-712** authorization; facilitator settles via **EIP-3009** (gasless for user), per x402 docs.
+* Client **retries** with `X-PAYMENT` proof; server **accepts** and enqueues. ([docs.cdp.coinbase.com][1])
+
+### 2) Settlement records
+
+* Write `payments(message_id, amount, chain_id=42220, tx_hash, settled_at)`.
+
+> x402 standardizes the 402 handshake for **instant, programmatic stablecoin payments over HTTP**. ([docs.cdp.coinbase.com][1])
+
+---
+
+# Phase 6 — Refunds & earnings (Day 3–4)
+
+* **Open-earnings:** on `/open`, release funds to recipient balance (or trigger an on-chain payout if you choose instant settlement).
+* **Auto-refunds:** a cron scans `now > expires_at AND status != opened` → refund **amount – small infra fee** back to sender via a normal USDC transfer (facilitator or treasury).
+* Keep a **refund policy** banner in the UI (“Unopened in 24h → refund”).
+* Track refund outcomes for reputation.
+
+---
+
+# Phase 7 — Reputation (MVP, Day 4)
+
+### Signals (last 60–90 days, exponentially decayed)
+
+* **Sender:** Wilson lower-bound **open rate**, **reply rate**, minus **block**/**refund** rates; small capped **net contribution** (paid − refunded).
+* **Recipient:** SLA-met rate, open speed (P90), reply rate (esp. when a bounty exists), low refund rate.
+
+### Response shape
+
+```json
+{
+  "score": 74,
+  "facts": ["Opens 78% (confident)","Replies 41%","0 blocks in 90d","Verified human"]
+}
+```
+
+All keyed by **Self action nullifier**. (Self is built for Sybil-resistant, privacy-preserving identity.) ([docs.self.xyz][2])
+
+---
+
+# Phase 8 — Data model (Postgres) (Day 4)
+
+* `users(nullifier pk, first_seen, last_seen)`
+* `recipients(id pk, base_price_usd, slots_per_hour, alpha, k, human_discount_pct, sla_hours)`
+* `messages(id, sender_nullifier, recipient_id, body_cipher, price_usd, status, sent_at, opened_at, expires_at)`
+* `payments(message_id fk, amount_usdc, tx_hash, settled_at)`
+* `feedback(message_id fk, rating, at)`
+* `blocks(recipient_id, sender_nullifier, at)`
+* `quotes(message_id fk, utilization, floor_usd, is_human, final_price_usd)`
+
+*(Encrypt `body` at rest or store ciphertext directly.)*
+
+---
+
+# Phase 9 — Abuse controls (Day 5)
+
+* **One-per-recipient throttle** (discounted rate once per 24h; repeats escalate price quadratically).
+* **Blocklist**: immediate deny + auto-refund.
+* **Policy gates**: enforce Self booleans (age/OFAC/country) before discount or delivery. ([docs.self.xyz][2])
+
+---
+
+# Phase 10 — Ops & admin (Day 5–6)
+
+* **Admin UI:** adjust recipient pricing/slots; inspect queue; force-refund; manage blocks.
+* **Metrics:** attempts, paid, delivered, open latency (P50/P90), refunds, rev by tier, human vs unverified mix.
+* **Alerts:** refund spikes, facilitator errors, RPC issues.
+
+---
+
+# Phase 11 — Optional hardening (parallel or week 2)
+
+* **Trusted UI attestation:** add a small “integrity badge” flow (publish your frontend hash and verify in an extension) to prevent spoofed paywalls.
+* **On-chain anchoring (Celo):** batch daily hashes of event logs into a Merkle root and write to a tiny “RootRegistry” contract → later auditability without PII.
+* **Frames entrypoint:** simple Farcaster Frame that displays current clearing price + “Verify for discount” link.
+
+---
+
+# End-to-end tests (continuous)
+
+1. **Verified vs unverified price** (quote reflects discount).
+2. **402 handshake** (resource inaccessible until pay; retry unlocks). ([docs.cdp.coinbase.com][1])
+3. **Refund path** (message expires → refund issued).
+4. **SLA + open** (opening triggers earnings).
+5. **Reputation math** (Wilson bound stable on small-n).
+6. **Policy gates** (age/OFAC/country filters).
+
+---
+
+# Deployment checklist
+
+* **Facilitator** and **x4pp-API** deployed behind HTTPS; health checks.
+* **Celo Forno RPC** configured; facilitator key rotated; per-day payout caps.
+* **Frontend** (already live) points to `API_BASE`; show clear **refund copy** and **verified human** badge.
+
+---
+
+## What connects to what (mental diagram)
+
+**Frontend (x4pp.xyz)** → `/quote` → (calls `/verify-self` if needed) → `/commit`
+→ **HTTP 402** (per x402) → wallet/facilitator settles USDC on **Celo** → client retries with `X-PAYMENT` → **accepted + queued** → recipient `/inbox` → `/open` or refund by cron.
+
+* **x402** gives you the HTTP-native payments & EIP-712/EIP-3009 flow. ([docs.cdp.coinbase.com][1])
+* **Self** gives you a **nullifier + policy booleans** with ZK proofs—perfect for “human discount” without PII. ([docs.self.xyz][2])
+
+---
+
+If you want, I can drop **ready-to-paste** JSON for the x402 `PaymentRequirements` body and a minimal **/verify-self** handler next, so your frontend can hit real endpoints immediately.
+
+[1]: https://docs.cdp.coinbase.com/x402/welcome?utm_source=chatgpt.com "Welcome to x402 - Coinbase Developer Documentation"
+[2]: https://docs.self.xyz/?utm_source=chatgpt.com "Self Protocol | Self Docs"
