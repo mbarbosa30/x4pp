@@ -17,18 +17,22 @@ router.get("/pending", async (req, res) => {
       return res.status(401).json({ error: "Authentication required" });
     }
 
-    // Get user's nullifier
+    // Get user's identifier (selfNullifier or ID - same logic as commit)
     const [user] = await db
       .select({
+        id: users.id,
         selfNullifier: users.selfNullifier,
       })
       .from(users)
       .where(eq(users.id, userId))
       .limit(1);
 
-    if (!user || !user.selfNullifier) {
+    if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
+
+    // Use same identifier logic as commit endpoint
+    const recipientIdentifier = user.selfNullifier || user.id;
 
     // Get pending messages sorted by bid descending
     const pendingMessages = await db
@@ -36,7 +40,7 @@ router.get("/pending", async (req, res) => {
       .from(messages)
       .where(
         and(
-          eq(messages.recipientNullifier, user.selfNullifier),
+          eq(messages.recipientNullifier, recipientIdentifier),
           eq(messages.status, "pending")
         )
       )
@@ -62,9 +66,10 @@ router.post("/:messageId/accept", async (req, res) => {
 
     const { messageId } = req.params;
 
-    // Get user's nullifier
+    // Get user's identifier (selfNullifier or ID - same logic as commit)
     const [user] = await db
       .select({
+        id: users.id,
         selfNullifier: users.selfNullifier,
         walletAddress: users.walletAddress,
       })
@@ -72,9 +77,12 @@ router.post("/:messageId/accept", async (req, res) => {
       .where(eq(users.id, userId))
       .limit(1);
 
-    if (!user || !user.selfNullifier) {
+    if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
+
+    // Use same identifier logic as commit endpoint
+    const recipientIdentifier = user.selfNullifier || user.id;
 
     // Get message
     const [message] = await db
@@ -88,7 +96,7 @@ router.post("/:messageId/accept", async (req, res) => {
     }
 
     // Verify ownership
-    if (message.recipientNullifier !== user.selfNullifier) {
+    if (message.recipientNullifier !== recipientIdentifier) {
       return res.status(403).json({ error: "Not authorized to accept this message" });
     }
 
@@ -164,18 +172,22 @@ router.post("/:messageId/decline", async (req, res) => {
     const { messageId } = req.params;
     const { reason } = req.body;
 
-    // Get user's nullifier
+    // Get user's identifier (selfNullifier or ID - same logic as commit)
     const [user] = await db
       .select({
+        id: users.id,
         selfNullifier: users.selfNullifier,
       })
       .from(users)
       .where(eq(users.id, userId))
       .limit(1);
 
-    if (!user || !user.selfNullifier) {
+    if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
+
+    // Use same identifier logic as commit endpoint
+    const recipientIdentifier = user.selfNullifier || user.id;
 
     // Get message
     const [message] = await db
@@ -189,7 +201,7 @@ router.post("/:messageId/decline", async (req, res) => {
     }
 
     // Verify ownership
-    if (message.recipientNullifier !== user.selfNullifier) {
+    if (message.recipientNullifier !== recipientIdentifier) {
       return res.status(403).json({ error: "Not authorized to decline this message" });
     }
 
