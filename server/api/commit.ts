@@ -19,11 +19,11 @@ const router = Router();
  */
 router.post("/", async (req, res) => {
   try {
-    const { recipientUsername, content, senderWallet, senderName, senderEmail, replyBounty, bidUsd, expirationHours } = req.body;
+    const { recipientIdentifier, content, senderWallet, senderName, senderEmail, replyBounty, bidUsd, expirationHours } = req.body;
 
-    if (!recipientUsername || !content || !senderName || !bidUsd || !senderWallet) {
+    if (!recipientIdentifier || !content || !senderName || !bidUsd || !senderWallet) {
       return res.status(400).json({ 
-        error: "recipientUsername, content, senderName, senderWallet, and bidUsd are required" 
+        error: "recipientIdentifier, content, senderName, senderWallet, and bidUsd are required" 
       });
     }
     
@@ -42,6 +42,9 @@ router.post("/", async (req, res) => {
       });
     }
 
+    // Determine if identifier is a wallet address or username
+    const isWalletAddress = recipientIdentifier.startsWith('0x') && recipientIdentifier.length === 42;
+    
     // Find recipient with their selected payment token
     const result = await db
       .select({
@@ -50,29 +53,64 @@ router.post("/", async (req, res) => {
       })
       .from(users)
       .leftJoin(tokens, eq(users.tokenId, tokens.id))
-      .where(eq(users.username, recipientUsername))
+      .where(isWalletAddress
+        ? eq(users.walletAddress, recipientIdentifier.toLowerCase())
+        : eq(users.username, recipientIdentifier)
+      )
       .limit(1);
 
+    let recipient;
+    let paymentToken;
+    let minBasePrice;
+    let recipientWallet;
+
     if (result.length === 0) {
-      return res.status(404).json({ error: "Recipient not found" });
-    }
+      // No registered user found
+      if (!isWalletAddress) {
+        return res.status(404).json({ error: "Recipient not found" });
+      }
+      
+      // Unregistered wallet address - use platform defaults
+      recipientWallet = recipientIdentifier.toLowerCase();
+      minBasePrice = 0.10; // Platform default
+      
+      // Get default USDC token for payments to unregistered wallets
+      const [defaultToken] = await db
+        .select()
+        .from(tokens)
+        .where(eq(tokens.symbol, "USDC"))
+        .limit(1);
+        
+      if (!defaultToken || !defaultToken.isActive) {
+        return res.status(500).json({ 
+          error: "Default payment token not available" 
+        });
+      }
+      
+      paymentToken = defaultToken;
+    } else {
+      // Registered user found
+      const { user: foundUser, token: foundToken } = result[0];
+      recipient = foundUser;
+      paymentToken = foundToken;
+      recipientWallet = recipient.walletAddress;
 
-    const { user: recipient, token: paymentToken } = result[0];
+      if (!recipient.walletAddress) {
+        return res.status(400).json({ 
+          error: "Recipient has not configured a payment wallet" 
+        });
+      }
 
-    if (!recipient.walletAddress) {
-      return res.status(400).json({ 
-        error: "Recipient has not configured a payment wallet" 
-      });
-    }
-
-    if (!paymentToken || !paymentToken.isActive) {
-      return res.status(400).json({ 
-        error: "Recipient's selected payment token is not available" 
-      });
+      if (!paymentToken || !paymentToken.isActive) {
+        return res.status(400).json({ 
+          error: "Recipient's selected payment token is not available" 
+        });
+      }
+      
+      minBasePrice = parseFloat(recipient.minBasePrice || "0.05");
     }
     
     // Check that bid meets minimum base price
-    const minBasePrice = parseFloat(recipient.minBasePrice || "0.05");
     if (bidAmount < minBasePrice) {
       return res.status(400).json({
         error: "Bid too low",
@@ -105,7 +143,7 @@ router.post("/", async (req, res) => {
             address: paymentToken.address,
             symbol: paymentToken.symbol,
           },
-          recipient: recipient.walletAddress,
+          recipient: recipientWallet,
           nonce,
           expiration: Math.floor(Date.now() / 1000) + 15 * 60, // 15 minutes in seconds
         }],
@@ -129,7 +167,7 @@ router.post("/", async (req, res) => {
     const paymentResult = await verifyPayment(
       paymentProof, 
       bidAmount, 
-      recipient.walletAddress,
+      recipientWallet,
       paymentToken.address,
       paymentToken.chainId,
       paymentToken.decimals
@@ -156,7 +194,7 @@ router.post("/", async (req, res) => {
             address: paymentToken.address,
             symbol: paymentToken.symbol,
           },
-          recipient: recipient.walletAddress,
+          recipient: recipientWallet,
           nonce,
           expiration: Math.floor(Date.now() / 1000) + 15 * 60, // 15 minutes in seconds
         }],
@@ -183,7 +221,7 @@ router.post("/", async (req, res) => {
       .insert(messages)
       .values({
         senderWallet: senderWallet.toLowerCase(), // Normalize to lowercase
-        recipientWallet: recipient.walletAddress.toLowerCase(), // Normalize to lowercase
+        recipientWallet: recipientWallet, // Already normalized to lowercase
         senderName,
         senderEmail: senderEmail || null,
         content,
@@ -202,7 +240,7 @@ router.post("/", async (req, res) => {
       tokenAddress: paymentProof.tokenAddress || paymentToken.address,
       amount: formatUnits(BigInt(paymentProof.amount), paymentToken.decimals), // Convert to decimal using formatUnits
       sender: paymentProof.sender,
-      recipient: recipient.walletAddress,
+      recipient: recipientWallet,
       txHash: null, // Will be set when receiver accepts
       status: "authorized", // Authorization verified, awaiting acceptance for settlement
       nonce: paymentProof.nonce,
