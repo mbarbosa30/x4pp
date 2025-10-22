@@ -15,6 +15,7 @@ import { Save, DollarSign } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useAuth } from "@/hooks/useAuth";
 
 interface UserSettings {
   basePrice: string;
@@ -37,10 +38,9 @@ export default function SettingsPanel() {
   const [slaHours, setSlaHours] = useState(24);
   const [walletAddress, setWalletAddress] = useState("");
   const { toast } = useToast();
+  const { user, isAuthenticated } = useAuth();
 
-  // For demo purposes, use a default username
-  // In production, this would come from user authentication
-  const currentUsername = "demo_user";
+  const currentUsername = user?.username;
 
   // Load current user settings from backend
   const { data: settings, isLoading } = useQuery<UserSettings>({
@@ -97,6 +97,16 @@ export default function SettingsPanel() {
   };
 
   const currentPrice = basePrice;
+
+  if (!isAuthenticated || !user) {
+    return (
+      <Card className="p-6">
+        <div className="text-center py-8 text-muted-foreground">
+          Please log in to view settings
+        </div>
+      </Card>
+    );
+  }
 
   if (isLoading) {
     return (
