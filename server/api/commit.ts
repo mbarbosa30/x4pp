@@ -19,11 +19,11 @@ const router = Router();
  */
 router.post("/", async (req, res) => {
   try {
-    const { recipientUsername, content, senderNullifier, senderName, senderEmail, replyBounty, bidUsd, expirationHours } = req.body;
+    const { recipientUsername, content, senderWallet, senderName, senderEmail, replyBounty, bidUsd, expirationHours } = req.body;
 
-    if (!recipientUsername || !content || !senderName || !bidUsd) {
+    if (!recipientUsername || !content || !senderName || !bidUsd || !senderWallet) {
       return res.status(400).json({ 
-        error: "recipientUsername, content, senderName, and bidUsd are required" 
+        error: "recipientUsername, content, senderName, senderWallet, and bidUsd are required" 
       });
     }
     
@@ -80,8 +80,6 @@ router.post("/", async (req, res) => {
         minBasePrice,
       });
     }
-
-    const recipientIdentifier = recipient.selfNullifier || recipient.id;
 
     // Check for payment header
     const paymentHeader = req.headers['x-payment'] as string;
@@ -171,15 +169,23 @@ router.post("/", async (req, res) => {
     }
 
     // Payment verified - create PENDING message (not auto-accepted in open bidding model)
-    const finalSenderNullifier = senderNullifier || `anon_${Date.now()}`;
+    // Validate that payment sender matches the claimed sender wallet
+    if (paymentProof.sender.toLowerCase() !== senderWallet.toLowerCase()) {
+      return res.status(400).json({ 
+        error: "Payment sender does not match claimed sender wallet" 
+      });
+    }
+    
     // Use sender's expiration time (not recipient's SLA)
     const expiresAt = new Date(Date.now() + (expirationHrs * 60 * 60 * 1000));
 
     const [newMessage] = await db
       .insert(messages)
       .values({
-        senderNullifier: finalSenderNullifier,
-        recipientNullifier: recipientIdentifier,
+        senderWallet: senderWallet.toLowerCase(), // Normalize to lowercase
+        recipientWallet: recipient.walletAddress.toLowerCase(), // Normalize to lowercase
+        senderNullifier: null, // Legacy field - deprecated
+        recipientNullifier: null, // Legacy field - deprecated
         senderName,
         senderEmail: senderEmail || null,
         content,
@@ -213,8 +219,8 @@ router.post("/", async (req, res) => {
       }),
     });
 
-    // Log reputation event
-    await logReputationEvent(finalSenderNullifier, "sent", newMessage.id);
+    // Log reputation event using wallet address
+    await logReputationEvent(senderWallet.toLowerCase(), "sent", newMessage.id);
 
     res.status(200).json({
       messageId: newMessage.id,
