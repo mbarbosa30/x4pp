@@ -12,6 +12,7 @@ import { Mail, DollarSign, Send, Loader2 } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import { useAccount } from "wagmi";
 import { useToast } from "@/hooks/use-toast";
+import { PLATFORM_DEFAULT_MIN_BID } from "@shared/constants";
 
 type ProfileData = {
   username: string | null;
@@ -21,8 +22,11 @@ type ProfileData = {
 };
 
 export default function PublicMessage() {
-  const [, params] = useRoute("/@:identifier");
-  const identifier = params?.identifier || "";
+  const [, usernameParams] = useRoute("/@:identifier");
+  const [, addressParams] = useRoute("/0x:address");
+  
+  // Identifier can come from either route
+  const identifier = usernameParams?.identifier || (addressParams?.address ? `0x${addressParams.address}` : "");
   const { address } = useAccount();
   const { toast } = useToast();
   
@@ -38,7 +42,7 @@ export default function PublicMessage() {
   });
 
   const isWalletAddress = identifier.startsWith('0x') && identifier.length === 42;
-  const minBid = profile ? parseFloat(profile.minBasePrice) : (isWalletAddress ? 0.10 : 0.05);
+  const minBid = profile ? parseFloat(profile.minBasePrice) : (isWalletAddress ? PLATFORM_DEFAULT_MIN_BID : 0.05);
   const displayName = profile?.username || (isWalletAddress ? `${identifier.slice(0, 6)}...${identifier.slice(-4)}` : identifier);
 
   const handleSend = async () => {

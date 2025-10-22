@@ -22,7 +22,8 @@ function Router() {
       <Route path="/profile" component={Profile} />
       <Route path="/inbox" component={InboxPending} />
       <Route path="/admin" component={AdminDashboard} />
-      <Route path="/@:username" component={PublicMessage} />
+      <Route path="/@:identifier" component={PublicMessage} />
+      <Route path="/0x:address" component={PublicMessage} />
       <Route component={NotFound} />
     </Switch>
   );

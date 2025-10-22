@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db } from "../db";
 import { users, messages, payments, reputationScores } from "@shared/schema";
 import { eq, sql, and } from "drizzle-orm";
+import { PLATFORM_DEFAULT_MIN_BID } from "@shared/constants";
 
 const router = Router();
 
@@ -29,7 +30,7 @@ router.get("/:identifier", async (req, res) => {
       return res.json({
         walletAddress: identifier.toLowerCase(),
         isRegistered: false,
-        minBasePrice: "0.10", // Platform default for unregistered wallets
+        minBasePrice: PLATFORM_DEFAULT_MIN_BID.toFixed(2),
         message: "This wallet hasn't registered yet. Messages sent will be visible when they register."
       });
     }
@@ -71,7 +72,7 @@ router.get("/:identifier", async (req, res) => {
       .select({ totalEarned: sql<string>`COALESCE(SUM(CAST(amount AS DECIMAL)), 0)` })
       .from(payments)
       .where(and(
-        eq(payments.recipient, user.walletAddress || ''),
+        eq(payments.recipient, user.walletAddress ? user.walletAddress.toLowerCase() : ''),
         eq(payments.status, 'settled')
       ));
 

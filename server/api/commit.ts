@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { verifyPayment } from "../x402/middleware";
 import { logReputationEvent } from "../reputation";
 import { parseUnits, formatUnits } from "viem";
+import { PLATFORM_DEFAULT_MIN_BID } from "@shared/constants";
 
 const router = Router();
 
@@ -72,7 +73,7 @@ router.post("/", async (req, res) => {
       
       // Unregistered wallet address - use platform defaults
       recipientWallet = recipientIdentifier.toLowerCase();
-      minBasePrice = 0.10; // Platform default
+      minBasePrice = PLATFORM_DEFAULT_MIN_BID;
       
       // Get default USDC token for payments to unregistered wallets
       const [defaultToken] = await db
