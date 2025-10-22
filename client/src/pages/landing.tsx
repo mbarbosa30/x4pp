@@ -88,31 +88,31 @@ export default function Landing() {
           <div className="grid md:grid-cols-3 gap-8">
             <Card className="p-6 space-y-4">
               <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
-                <Shield className="h-6 w-6 text-primary" />
+                <TrendingUp className="h-6 w-6 text-primary" />
               </div>
-              <h3 className="text-xl font-semibold">Verify once</h3>
+              <h3 className="text-xl font-semibold">Place your bid</h3>
               <p className="text-muted-foreground">
-                Prove you're a unique human to unlock discounted rates. Your verification is cached for weeks.
+                See what others are bidding (P25/median/P75) and choose your offer. No locked funds—just sign an authorization.
               </p>
             </Card>
 
             <Card className="p-6 space-y-4">
               <div className="h-12 w-12 rounded-lg bg-success/10 flex items-center justify-center">
-                <DollarSign className="h-6 w-6 text-success" />
+                <Users className="h-6 w-6 text-success" />
               </div>
-              <h3 className="text-xl font-semibold">Pay tiny amounts</h3>
+              <h3 className="text-xl font-semibold">Receiver decides</h3>
               <p className="text-muted-foreground">
-                Messages cost cents, not dollars. Dynamic pricing means busy inboxes cost more.
+                Recipients see all pending bids and manually accept or decline each one. Full control over their inbox.
               </p>
             </Card>
 
             <Card className="p-6 space-y-4">
               <div className="h-12 w-12 rounded-lg bg-price/10 flex items-center justify-center">
-                <Clock className="h-6 w-6 text-price" />
+                <Wallet className="h-6 w-6 text-price" />
               </div>
-              <h3 className="text-xl font-semibold">Get refunds</h3>
+              <h3 className="text-xl font-semibold">Instant settlement</h3>
               <p className="text-muted-foreground">
-                Unopened messages after the time window? Senders get automatic refunds minus a tiny fee.
+                On accept, USDC transfers on-chain. On decline or expiry, your funds never left your wallet.
               </p>
             </Card>
           </div>
