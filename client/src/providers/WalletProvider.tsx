@@ -1,7 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { getAccount, watchAccount, connect, disconnect, ConnectorNotFoundError } from '@wagmi/core';
-import { wagmiConfig } from "@/lib/wagmi-config";
-import { injected } from '@wagmi/connectors';
+import { getAccount, watchAccount, disconnect } from '@wagmi/core';
+import { wagmiConfig, modal } from "@/lib/reown-config";
 
 interface WalletContextType {
   address: string | undefined;
@@ -26,49 +25,45 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
     // Watch for account changes
     const unwatch = watchAccount(wagmiConfig, {
-      onChange(account) {
+      async onChange(account) {
+        const previousAddress = address;
         setAddress(account.address);
         setIsConnected(account.isConnected);
+
+        // If wallet just connected (not just changed), attempt auto-login
+        if (account.isConnected && account.address && !previousAddress) {
+          try {
+            const response = await fetch('/api/auth/login', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ walletAddress: account.address }),
+              credentials: 'include',
+            });
+
+            if (response.ok) {
+              const data = await response.json();
+              console.log('Auto-logged in as:', data.user.username);
+              // Force a page refresh to update auth state
+              window.location.reload();
+            }
+          } catch (loginError) {
+            // Silent fail - user is not registered yet
+            console.log('No existing account for this wallet');
+          }
+        }
       },
     });
 
     return () => unwatch();
-  }, []);
+  }, [address]);
 
   const handleConnect = async () => {
     try {
       setIsConnecting(true);
-      const result = await connect(wagmiConfig, {
-        connector: injected(),
-      });
-      const walletAddr = result.accounts[0];
-      setAddress(walletAddr);
-      setIsConnected(true);
-
-      // Attempt auto-login if user exists with this wallet
-      try {
-        const response = await fetch('/api/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ walletAddress: walletAddr }),
-          credentials: 'include',
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          console.log('Auto-logged in as:', data.user.username);
-          // Force a page refresh to update auth state
-          window.location.reload();
-        }
-      } catch (loginError) {
-        // Silent fail - user is not registered yet
-        console.log('No existing account for this wallet');
-      }
+      // Open Reown AppKit modal for wallet connection
+      await modal.open();
     } catch (error) {
-      console.error("Failed to connect wallet:", error);
-      if (error instanceof ConnectorNotFoundError) {
-        throw new Error("No wallet extension found. Please install MetaMask or another Web3 wallet.");
-      }
+      console.error("Failed to open wallet modal:", error);
       throw error;
     } finally {
       setIsConnecting(false);
