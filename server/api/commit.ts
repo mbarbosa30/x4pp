@@ -117,7 +117,8 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ error: "Invalid X-PAYMENT header format" });
     }
 
-    const paymentValid = await verifyPayment(paymentProof, amountUSD);
+    // SECURITY: Pass server-determined recipient wallet to prevent payment theft
+    const paymentValid = await verifyPayment(paymentProof, amountUSD, recipient.walletAddress);
 
     if (!paymentValid) {
       // Return 402 with PaymentRequirements for retry (x402 protocol compliance)

@@ -89,6 +89,7 @@ export const payments = pgTable("payments", {
   sender: text("sender").notNull(),
   recipient: text("recipient").notNull(),
   txHash: text("tx_hash"),
+  refundTxHash: text("refund_tx_hash"),
   status: text("status").notNull().default("pending"), // pending, settled, failed, refunded
   nonce: text("nonce").notNull().unique(),
   signature: text("signature"),

@@ -4,6 +4,7 @@ import { users } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { calculatePriceForUser } from "../pricing";
 import { getQueuedMessageCount } from "../queue";
+import { generatePaymentRequirements } from "../celo-payment";
 
 const router = Router();
 
@@ -49,13 +50,25 @@ router.post("/", async (req, res) => {
     // Calculate price
     const quote = calculatePriceForUser(recipient, queuedMessages, isHuman);
 
-    // Return format that frontend expects
+    if (!recipient.walletAddress) {
+      return res.status(400).json({ 
+        error: "Recipient has not configured a payment wallet address" 
+      });
+    }
+
+    const paymentRequirements = generatePaymentRequirements(
+      recipient.walletAddress,
+      parseFloat(quote.priceUSD)
+    );
+
+    // Return format that frontend expects, now with x402 payment requirements
     res.json({
       priceUSD: parseFloat(quote.priceUSD),
       priceUSDC: quote.priceUSD,
       surgeMultiplier: quote.surge.multiplier,
       humanDiscountApplied: quote.humanDiscountApplied,
       surge: quote.surge,
+      payment: paymentRequirements,
     });
   } catch (error) {
     console.error("Error generating quote:", error);

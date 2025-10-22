@@ -4,13 +4,13 @@ import { PaymentRequirementsResponse, PaymentProof } from "./types";
 import { v4 as uuidv4 } from "uuid";
 
 // Middleware to enforce x402 payment for protected routes
-export function requirePayment(priceUSD: number) {
+export function requirePayment(priceUSD: number, recipientWallet?: string) {
   return async (req: Request, res: Response, next: NextFunction) => {
     const paymentHeader = req.headers["x-payment"] as string;
 
     if (!paymentHeader) {
       // No payment provided - return 402 with payment requirements
-      const response = generatePaymentRequirements(priceUSD);
+      const response = generatePaymentRequirements(priceUSD, recipientWallet);
       return res.status(402).json(response);
     }
 
@@ -18,13 +18,13 @@ export function requirePayment(priceUSD: number) {
       // Parse payment proof from header
       const paymentProof: PaymentProof = JSON.parse(paymentHeader);
 
-      // Verify payment (this would call facilitator in production)
-      const isValid = await verifyPayment(paymentProof, priceUSD);
+      // Verify payment with server-determined recipient wallet
+      const isValid = await verifyPayment(paymentProof, priceUSD, recipientWallet);
 
       if (!isValid) {
         return res.status(402).json({
           error: "Payment verification failed",
-          ...generatePaymentRequirements(priceUSD),
+          ...generatePaymentRequirements(priceUSD, recipientWallet),
         });
       }
 
@@ -35,7 +35,7 @@ export function requirePayment(priceUSD: number) {
       console.error("Payment parsing error:", error);
       return res.status(402).json({
         error: "Invalid payment format",
-        ...generatePaymentRequirements(priceUSD),
+        ...generatePaymentRequirements(priceUSD, recipientWallet),
       });
     }
   };
@@ -88,15 +88,19 @@ export function generatePaymentRequirements(
   };
 }
 
-// Verify payment proof (simplified for MVP - production would call facilitator)
+// Verify payment proof with real on-chain verification
 async function verifyPayment(
   proof: PaymentProof,
-  expectedAmountUSD: number
+  expectedAmountUSD: number,
+  expectedRecipient?: string
 ): Promise<boolean> {
   try {
-    console.log("[Payment Verification] Starting verification...");
+    console.log("[Payment Verification] Starting on-chain verification...");
     console.log("[Payment Verification] Proof:", JSON.stringify(proof, null, 2));
     console.log("[Payment Verification] Expected amount USD:", expectedAmountUSD);
+
+    // Import Celo payment service
+    const { verifyPaymentAuthorization, executePaymentSettlement } = await import("../celo-payment");
 
     // Basic validation
     if (!proof.signature || !proof.nonce) {
@@ -134,10 +138,56 @@ async function verifyPayment(
       return false;
     }
 
-    // TODO: In production, verify EIP-712 signature
-    // TODO: Call facilitator to settle payment on-chain
-    // For now, accept if basic checks pass
-    console.log("[Payment Verification] SUCCESS: All checks passed");
+    // CRITICAL: Verify recipient matches server-determined wallet address
+    if (expectedRecipient) {
+      if (proof.recipient.toLowerCase() !== expectedRecipient.toLowerCase()) {
+        console.error("[Payment Verification] FAILED: Recipient address mismatch (SECURITY VIOLATION)");
+        console.error(`  Expected (server): ${expectedRecipient}`);
+        console.error(`  Got (client):      ${proof.recipient}`);
+        return false;
+      }
+    }
+
+    // Parse EIP-712 signature components (v, r, s)
+    // Signature format: "0x" + r (32 bytes) + s (32 bytes) + v (1 byte)
+    const sig = proof.signature.startsWith('0x') ? proof.signature.slice(2) : proof.signature;
+    const r = `0x${sig.slice(0, 64)}` as `0x${string}`;
+    const s = `0x${sig.slice(64, 128)}` as `0x${string}`;
+    const v = parseInt(sig.slice(128, 130), 16);
+
+    const paymentAuth = {
+      from: proof.sender as `0x${string}`,
+      to: proof.recipient as `0x${string}`,
+      value: proof.amount,
+      validAfter: 0, // Immediate validity
+      validBefore: proof.expiration,
+      nonce: proof.nonce as `0x${string}`,
+      signature: { v, r, s },
+    };
+
+    // Verify payment authorization on-chain using server-determined recipient
+    const recipientToVerify = (expectedRecipient || proof.recipient) as `0x${string}`;
+    const isValid = await verifyPaymentAuthorization(
+      paymentAuth,
+      recipientToVerify,
+      BigInt(expectedAmount)
+    );
+
+    if (!isValid) {
+      console.log("[Payment Verification] FAILED: On-chain verification failed");
+      return false;
+    }
+
+    // Execute payment settlement on Celo blockchain
+    const settlement = await executePaymentSettlement(paymentAuth);
+    
+    if (!settlement.success) {
+      console.log("[Payment Verification] FAILED: Settlement execution failed:", settlement.error);
+      return false;
+    }
+
+    console.log("[Payment Verification] SUCCESS: Payment verified and settled on-chain");
+    console.log("[Payment Verification] Transaction hash:", settlement.txHash);
     return true;
   } catch (error) {
     console.error("Payment verification error:", error);

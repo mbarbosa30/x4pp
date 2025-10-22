@@ -92,7 +92,7 @@ export async function processExpiredMessages(): Promise<RefundResult[]> {
   }
 }
 
-// Execute a refund (simplified for MVP - would interact with blockchain in production)
+// Execute a refund with real on-chain USDC transfer on Celo
 async function executeRefund(
   messageId: string,
   payment: any,
@@ -104,22 +104,29 @@ async function executeRefund(
       return false;
     }
 
-    // Update payment status
+    // Import Celo payment service for refunds
+    const { executeRefund: executeOnChainRefund } = await import("../celo-payment");
+
+    // Execute on-chain USDC refund
+    const refundAmount = parseFloat(payment.amount);
+    const result = await executeOnChainRefund(payment.sender as `0x${string}`, refundAmount);
+
+    if (!result.success) {
+      console.error(`On-chain refund failed for message ${messageId}:`, result.error);
+      return false;
+    }
+
+    // Update payment status with transaction hash
     await db
       .update(payments)
       .set({
         status: "refunded",
+        refundTxHash: result.txHash,
       })
       .where(eq(payments.id, payment.id));
 
-    // TODO: In production, execute actual USDC refund transaction on Celo
-    // This would involve:
-    // 1. Creating and signing a USDC transfer transaction
-    // 2. Sending from payment wallet back to sender
-    // 3. Waiting for transaction confirmation
-    // 4. Recording tx hash
-
     console.log(`Refund executed for message ${messageId}: ${payment.amount} USDC to ${payment.sender}`);
+    console.log(`Transaction hash: ${result.txHash}`);
     return true;
   } catch (error) {
     console.error(`Refund execution error for message ${messageId}:`, error);
