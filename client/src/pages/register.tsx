@@ -27,20 +27,9 @@ const registrationFormSchema = z.object({
     .max(100, "Display name must be at most 100 characters"),
   tokenId: z.string().min(1, "Please select a payment token"),
   isPublic: z.boolean(),
-  basePrice: z.number()
-    .min(0.01, "Base price must be at least $0.01")
-    .max(100, "Base price must be at most $100"),
-  surgeAlpha: z.number()
-    .min(0, "Surge multiplier cannot be negative")
-    .max(10, "Surge multiplier must be at most 10"),
-  humanDiscountPct: z.number()
-    .min(0, "Discount cannot be negative")
-    .max(1, "Discount cannot exceed 100%"),
-  slotsPerWindow: z.number()
-    .int("Slots must be a whole number")
-    .min(1, "Must have at least 1 slot")
-    .max(100, "Maximum 100 slots per window"),
-  timeWindow: z.enum(["hour", "day", "week", "month"]),
+  minBasePrice: z.number()
+    .min(0.01, "Minimum bid must be at least $0.01")
+    .max(100, "Minimum bid must be at most $100"),
   slaHours: z.number()
     .int("SLA hours must be a whole number")
     .min(1, "SLA must be at least 1 hour")
@@ -77,12 +66,8 @@ export default function Register() {
       displayName: "",
       tokenId: "",
       isPublic: true,
-      basePrice: 0.10,
-      surgeAlpha: 1.20,
-      humanDiscountPct: 0.85,
-      slotsPerWindow: 10,
-      timeWindow: "day",
-      slaHours: 48,
+      minBasePrice: 0.10,
+      slaHours: 24,
     },
   });
 
@@ -97,9 +82,7 @@ export default function Register() {
     mutationFn: async (data: RegistrationFormValues & { walletAddress: string }) => {
       const response = await apiRequest("POST", "/api/users", {
         ...data,
-        basePrice: data.basePrice.toFixed(2),
-        surgeAlpha: data.surgeAlpha.toFixed(2),
-        humanDiscountPct: data.humanDiscountPct.toFixed(2),
+        minBasePrice: data.minBasePrice.toFixed(2),
       });
       return await response.json();
     },
@@ -279,16 +262,16 @@ export default function Register() {
               <div className="space-y-4 border-t pt-4">
                 <h3 className="font-semibold flex items-center gap-2">
                   <DollarSign className="h-4 w-4" />
-                  Pricing Configuration
+                  Open Bidding Settings
                 </h3>
 
                 <FormField
                   control={form.control}
-                  name="basePrice"
+                  name="minBasePrice"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>
-                        Base Price: ${field.value.toFixed(2)} USDC
+                        Minimum Bid: ${field.value.toFixed(2)} USDC
                       </FormLabel>
                       <FormControl>
                         <Slider
@@ -297,87 +280,16 @@ export default function Register() {
                           step={0.01}
                           value={[field.value]}
                           onValueChange={([value]) => field.onChange(value)}
-                          data-testid="slider-base-price"
+                          data-testid="slider-min-base-price"
                         />
                       </FormControl>
                       <FormDescription>
-                        Minimum cost to send you a message
+                        Lowest bid you'll accept. Senders can bid higher.
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-
-                <FormField
-                  control={form.control}
-                  name="humanDiscountPct"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>
-                        Human Discount: {Math.round(field.value * 100)}% off
-                      </FormLabel>
-                      <FormControl>
-                        <Slider
-                          min={0}
-                          max={1}
-                          step={0.05}
-                          value={[field.value]}
-                          onValueChange={([value]) => field.onChange(value)}
-                          data-testid="slider-human-discount"
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        Verified humans pay less
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="slotsPerWindow"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Slots per {form.watch("timeWindow")}</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            {...field}
-                            data-testid="input-slots"
-                            onChange={(e) => field.onChange(parseInt(e.target.value) || 1)}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="timeWindow"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Time Window</FormLabel>
-                        <Select value={field.value} onValueChange={field.onChange}>
-                          <FormControl>
-                            <SelectTrigger data-testid="select-time-window">
-                              <SelectValue />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="hour">Hour</SelectItem>
-                            <SelectItem value="day">Day</SelectItem>
-                            <SelectItem value="week">Week</SelectItem>
-                            <SelectItem value="month">Month</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
 
                 <FormField
                   control={form.control}
@@ -386,7 +298,7 @@ export default function Register() {
                     <FormItem>
                       <FormLabel className="flex items-center gap-2">
                         <Clock className="h-4 w-4" />
-                        SLA (Auto-refund if not opened): {field.value} hours
+                        Response SLA: {field.value} hours
                       </FormLabel>
                       <FormControl>
                         <Slider
@@ -398,6 +310,9 @@ export default function Register() {
                           data-testid="slider-sla-hours"
                         />
                       </FormControl>
+                      <FormDescription>
+                        Bids expire after this time if not accepted
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}

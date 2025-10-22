@@ -18,23 +18,14 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
 
 interface UserSettings {
-  basePrice: string;
-  surgeAlpha: string;
-  surgeK: string;
-  humanDiscountPct: string;
-  slotsPerWindow: number;
-  timeWindow: string;
+  minBasePrice: string;
   slaHours: number;
   walletAddress: string;
+  tokenId: string;
 }
 
 export default function SettingsPanel() {
-  const [basePrice, setBasePrice] = useState(0.02);
-  const [surgeAlpha, setSurgeAlpha] = useState(0.5);
-  const [surgeK, setSurgeK] = useState(5);
-  const [humanDiscountPct, setHumanDiscountPct] = useState(80);
-  const [slotsPerWindow, setSlotsPerWindow] = useState(5);
-  const [timeWindow, setTimeWindow] = useState("hour");
+  const [minBasePrice, setMinBasePrice] = useState(0.10);
   const [slaHours, setSlaHours] = useState(24);
   const [walletAddress, setWalletAddress] = useState("");
   const { toast } = useToast();
@@ -51,12 +42,7 @@ export default function SettingsPanel() {
   // Populate form fields when settings are loaded
   useEffect(() => {
     if (settings) {
-      setBasePrice(parseFloat(settings.basePrice) || 0.02);
-      setSurgeAlpha(parseFloat(settings.surgeAlpha) || 0.5);
-      setSurgeK(parseFloat(settings.surgeK) || 5);
-      setHumanDiscountPct(parseFloat(settings.humanDiscountPct) || 80);
-      setSlotsPerWindow(settings.slotsPerWindow || 5);
-      setTimeWindow(settings.timeWindow || "hour");
+      setMinBasePrice(parseFloat(settings.minBasePrice) || 0.10);
       setSlaHours(settings.slaHours || 24);
       setWalletAddress(settings.walletAddress || "");
     }
@@ -85,18 +71,12 @@ export default function SettingsPanel() {
 
   const handleSave = () => {
     saveMutation.mutate({
-      basePrice: basePrice.toString(),
-      surgeAlpha: surgeAlpha.toString(),
-      surgeK: surgeK.toString(),
-      humanDiscountPct: humanDiscountPct.toString(),
-      slotsPerWindow,
-      timeWindow,
+      minBasePrice: minBasePrice.toString(),
       slaHours,
       walletAddress,
+      tokenId: settings?.tokenId || "",
     });
   };
-
-  const currentPrice = basePrice;
 
   if (!isAuthenticated || !user) {
     return (
@@ -122,151 +102,59 @@ export default function SettingsPanel() {
     <Card className="p-6">
       <div className="space-y-8">
         <div>
-          <h3 className="text-lg font-semibold mb-4">Pricing Configuration</h3>
+          <h3 className="text-lg font-semibold mb-4">Open Bidding Configuration</h3>
           <div className="space-y-6">
             <div>
-              <Label htmlFor="base-price">Base Price (USDC)</Label>
+              <Label htmlFor="min-base-price">Minimum Bid (USDC)</Label>
               <div className="flex items-center gap-3 mt-2">
                 <Input
-                  id="base-price"
+                  id="min-base-price"
                   type="number"
                   step="0.01"
                   min="0.01"
                   max="5.00"
-                  value={basePrice}
-                  onChange={(e) => setBasePrice(parseFloat(e.target.value) || 0.01)}
+                  value={minBasePrice}
+                  onChange={(e) => setMinBasePrice(parseFloat(e.target.value) || 0.01)}
                   className="max-w-32"
-                  data-testid="input-base-price"
+                  data-testid="input-min-base-price"
                 />
                 <span className="text-sm text-muted-foreground">
-                  Minimum price to send you a message
+                  Lowest bid you'll accept (senders can bid higher)
                 </span>
               </div>
             </div>
 
             <div>
-              <Label htmlFor="surge-alpha">Surge Sensitivity: {surgeAlpha.toFixed(1)}</Label>
-              <div className="mt-3">
-                <Slider
-                  id="surge-alpha"
-                  min={0}
-                  max={1}
-                  step={0.1}
-                  value={[surgeAlpha]}
-                  onValueChange={(value) => setSurgeAlpha(value[0])}
-                  className="mb-2"
-                  data-testid="slider-surge-alpha"
+              <Label htmlFor="sla-hours">Response SLA (hours)</Label>
+              <div className="flex items-center gap-3 mt-2">
+                <Input
+                  id="sla-hours"
+                  type="number"
+                  min="1"
+                  max="168"
+                  value={slaHours}
+                  onChange={(e) => setSlaHours(parseInt(e.target.value) || 24)}
+                  className="max-w-32"
+                  data-testid="input-sla-hours"
                 />
-                <p className="text-xs text-muted-foreground">
-                  How aggressively price increases with demand
-                </p>
-              </div>
-            </div>
-
-            <div>
-              <Label htmlFor="surge-k">Surge Threshold: {surgeK}</Label>
-              <div className="mt-3">
-                <Slider
-                  id="surge-k"
-                  min={1}
-                  max={20}
-                  step={1}
-                  value={[surgeK]}
-                  onValueChange={(value) => setSurgeK(value[0])}
-                  className="mb-2"
-                  data-testid="slider-surge-k"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Queue messages before surge pricing kicks in
-                </p>
-              </div>
-            </div>
-
-            <div>
-              <Label htmlFor="human-discount">Human Discount: {humanDiscountPct}%</Label>
-              <div className="mt-3">
-                <Slider
-                  id="human-discount"
-                  min={0}
-                  max={100}
-                  step={5}
-                  value={[humanDiscountPct]}
-                  onValueChange={(value) => setHumanDiscountPct(value[0])}
-                  className="mb-2"
-                  data-testid="slider-human-discount"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Discount for verified humans (via Self Protocol)
-                </p>
+                <span className="text-sm text-muted-foreground">
+                  Bids expire after this time if not accepted
+                </span>
               </div>
             </div>
 
             <Card className="p-4 bg-price/5 border-price/20">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Base rate</span>
+                <span className="text-sm text-muted-foreground">Minimum bid</span>
                 <div className="flex items-center gap-1">
                   <DollarSign className="h-4 w-4 text-price" />
                   <span className="text-2xl font-bold tabular-nums text-price" data-testid="text-current-rate">
-                    {currentPrice.toFixed(2)}
+                    {minBasePrice.toFixed(2)}
                   </span>
                   <span className="text-sm text-muted-foreground ml-1">USDC</span>
                 </div>
               </div>
             </Card>
-          </div>
-        </div>
-
-        <div>
-          <h3 className="text-lg font-semibold mb-4">Attention Slots</h3>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="slots">Number of slots</Label>
-              <Input
-                id="slots"
-                type="number"
-                min="1"
-                max="20"
-                value={slotsPerWindow}
-                onChange={(e) => setSlotsPerWindow(parseInt(e.target.value) || 1)}
-                className="max-w-32 mt-2"
-                data-testid="input-slots"
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="time-window">Time window</Label>
-              <Select value={timeWindow} onValueChange={setTimeWindow}>
-                <SelectTrigger className="max-w-48 mt-2" id="time-window" data-testid="select-time-window">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="hour">Per hour</SelectItem>
-                  <SelectItem value="day">Per day</SelectItem>
-                  <SelectItem value="week">Per week</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label htmlFor="sla-hours">SLA Hours</Label>
-              <Input
-                id="sla-hours"
-                type="number"
-                min="1"
-                max="168"
-                value={slaHours}
-                onChange={(e) => setSlaHours(parseInt(e.target.value) || 24)}
-                className="max-w-32 mt-2"
-                data-testid="input-sla-hours"
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                Hours before unopened messages get auto-refunded
-              </p>
-            </div>
-
-            <p className="text-sm text-muted-foreground">
-              Only the top {slotsPerWindow} highest-paying messages will reach your inbox
-            </p>
           </div>
         </div>
 

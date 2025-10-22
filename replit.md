@@ -5,6 +5,23 @@
 x4pp is a peer-to-peer messaging application with an innovative "attention market" model where sending messages requires humanity verification and dynamic pricing. The app enables users to monetize their attention by setting prices for incoming messages, with built-in protections against spam through verification gates and surge pricing mechanisms.
 
 **Recent Updates (Oct 22, 2025):**
+- **CRITICAL PAYMENT FIXES COMPLETED ✅**: Fixed escrow-settle-refund flow for open bidding model
+  - Backend: settlePayment now replays ORIGINAL EIP-3009 authorization with validAfter/validBefore from commit
+  - Backend: refundPayment simplified - no on-chain transfer needed (authorization simply not executed)
+  - Backend: commit endpoint stores complete signature object with validAfter/validBefore for settlement
+  - Architecture: Funds never leave sender's wallet until receiver accepts (true escrow via EIP-3009)
+  - Security: Fixed signature replay bug that would have broken all settlements
+- **Open Bidding Model Backend Complete ✅**: Simplified from surge pricing to receiver-driven bidding
+  - Schema: Removed surge pricing fields (surgeAlpha, surgeK, humanDiscountPct, slotsPerWindow, timeWindow)
+  - Schema: Renamed basePrice → minBasePrice (receiver sets minimum acceptable bid)
+  - Schema: Added bidUsd, acceptedAt, declinedAt to messages; status enum: pending/accepted/declined/expired
+  - API: GET /api/price-guide/:username calculates P25/median/P75 from pending bids (winsorized)
+  - API: POST /api/messages/commit creates pending message with bidUsd (not auto-accepted)
+  - API: GET /api/messages/pending retrieves pending messages sorted by bid descending
+  - API: POST /api/messages/:id/accept settles payment on-chain and marks message accepted
+  - API: POST /api/messages/:id/decline marks authorization unused (no refund transfer)
+  - API: Settings endpoints updated to minBasePrice-only schema (slaHours, walletAddress, tokenId)
+  - Auto-refund: Updated to refund expired pending messages (24h SLA)
 - **Wallet-Based Auto-Login Implemented ✅**: Seamless authentication when wallet connects
   - Backend: Login endpoint now accepts walletAddress for auto-login
   - Frontend: WalletProvider auto-logs in users when they connect their wallet
@@ -35,9 +52,11 @@ x4pp is a peer-to-peer messaging application with an innovative "attention marke
 - Added wagmi/viem integration for Web3 wallet interactions
 
 **Next Steps:**
-- Manual UI testing: wallet connect → registration → settings validation
-- Add automated integration tests for auth flow and registration
-- Monitor production logs for on-chain settlement and refund execution
+- Update frontend: registration form and settings panel (remove surge pricing fields)
+- Create ComposeMessage UI: fetch price guide, show reference range, bid input with quick buttons
+- Create InboxPending page: show pending messages with accept/decline actions
+- Manual E2E testing: registration → settings → compose → accept/decline → verify payment settlement
+- Add automated integration tests for open bidding flow
 
 Key features include:
 - **Proof-of-humanity gating**: Verified humans pay discounted rates; unverified users can still send but at higher prices
