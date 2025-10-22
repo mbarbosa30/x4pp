@@ -177,7 +177,10 @@ export async function executePaymentSettlement(
       throw new Error('PAYMENT_WALLET_PRIVATE_KEY not configured');
     }
 
-    const account = privateKeyToAccount(process.env.PAYMENT_WALLET_PRIVATE_KEY as Hex);
+    // Ensure private key has 0x prefix
+    const privateKey = process.env.PAYMENT_WALLET_PRIVATE_KEY;
+    const formattedKey = (privateKey.startsWith('0x') ? privateKey : `0x${privateKey}`) as Hex;
+    const account = privateKeyToAccount(formattedKey);
     
     const walletClient = createWalletClient({
       account,
@@ -230,7 +233,10 @@ export async function executeRefund(
       throw new Error('PAYMENT_WALLET_PRIVATE_KEY not configured');
     }
 
-    const account = privateKeyToAccount(process.env.PAYMENT_WALLET_PRIVATE_KEY as Hex);
+    // Ensure private key has 0x prefix
+    const privateKey = process.env.PAYMENT_WALLET_PRIVATE_KEY;
+    const formattedKey = (privateKey.startsWith('0x') ? privateKey : `0x${privateKey}`) as Hex;
+    const account = privateKeyToAccount(formattedKey);
     
     const walletClient = createWalletClient({
       account,
