@@ -27,11 +27,28 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     const unwatch = watchAccount(wagmiConfig, {
       async onChange(account) {
         const previousAddress = address;
+        const previousConnected = isConnected;
+        
         setAddress(account.address);
         setIsConnected(account.isConnected);
 
-        // If wallet just connected (not just changed), attempt auto-login
-        if (account.isConnected && account.address && !previousAddress) {
+        // Handle wallet disconnect (external or via disconnect button)
+        if (previousConnected && !account.isConnected) {
+          try {
+            await fetch('/api/auth/logout', {
+              method: 'POST',
+              credentials: 'include',
+            });
+            console.log('Auto-logged out due to wallet disconnect');
+            window.location.reload();
+          } catch (logoutError) {
+            console.error('Failed to auto-logout:', logoutError);
+          }
+          return;
+        }
+
+        // Handle wallet connection or account switch - attempt auto-login
+        if (account.isConnected && account.address && account.address !== previousAddress) {
           try {
             const response = await fetch('/api/auth/login', {
               method: 'POST',
@@ -55,7 +72,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     });
 
     return () => unwatch();
-  }, [address]);
+  }, [address, isConnected]);
 
   const handleConnect = async () => {
     try {
