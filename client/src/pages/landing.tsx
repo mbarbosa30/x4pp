@@ -131,27 +131,27 @@ export default function Landing() {
                 <div className="flex gap-3">
                   <Check className="h-5 w-5 text-success mt-0.5 flex-shrink-0" />
                   <div>
-                    <p className="font-medium">Set your base price</p>
+                    <p className="font-medium">Set your minimum base price</p>
                     <p className="text-sm text-muted-foreground">
-                      From $0.01 to $5.00 per message
+                      The lowest bid you'll accept, starting from $0.01
                     </p>
                   </div>
                 </div>
                 <div className="flex gap-3">
                   <Check className="h-5 w-5 text-success mt-0.5 flex-shrink-0" />
                   <div>
-                    <p className="font-medium">Control attention slots</p>
+                    <p className="font-medium">Accept or decline each bid</p>
                     <p className="text-sm text-muted-foreground">
-                      Limit messages per hour, day, or week
+                      Full control—choose which messages to read
                     </p>
                   </div>
                 </div>
                 <div className="flex gap-3">
                   <Check className="h-5 w-5 text-success mt-0.5 flex-shrink-0" />
                   <div>
-                    <p className="font-medium">Enable surge pricing</p>
+                    <p className="font-medium">Set your response SLA</p>
                     <p className="text-sm text-muted-foreground">
-                      Prices rise automatically when demand is high
+                      Bids expire if you don't respond within your timeframe
                     </p>
                   </div>
                 </div>
