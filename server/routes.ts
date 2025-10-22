@@ -54,6 +54,142 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get user settings by username
+  app.get("/api/settings/:username", async (req, res) => {
+    try {
+      const { username } = req.params;
+      let user = await db
+        .select({
+          basePrice: users.basePrice,
+          surgeAlpha: users.surgeAlpha,
+          surgeK: users.surgeK,
+          humanDiscountPct: users.humanDiscountPct,
+          slotsPerWindow: users.slotsPerWindow,
+          timeWindow: users.timeWindow,
+          slaHours: users.slaHours,
+          walletAddress: users.walletAddress,
+        })
+        .from(users)
+        .where(eq(users.username, username))
+        .limit(1);
+
+      // Auto-create user if doesn't exist (for demo/development)
+      if (user.length === 0) {
+        await db.insert(users).values({
+          username,
+          displayName: username.charAt(0).toUpperCase() + username.slice(1).replace(/_/g, ' '),
+          selfNullifier: `${username}_nullifier`,
+          verified: false,
+        });
+
+        // Fetch the newly created user
+        user = await db
+          .select({
+            basePrice: users.basePrice,
+            surgeAlpha: users.surgeAlpha,
+            surgeK: users.surgeK,
+            humanDiscountPct: users.humanDiscountPct,
+            slotsPerWindow: users.slotsPerWindow,
+            timeWindow: users.timeWindow,
+            slaHours: users.slaHours,
+            walletAddress: users.walletAddress,
+          })
+          .from(users)
+          .where(eq(users.username, username))
+          .limit(1);
+      }
+
+      res.json(user[0]);
+    } catch (error) {
+      console.error("Error fetching user settings:", error);
+      res.status(500).json({ error: "Failed to fetch settings" });
+    }
+  });
+
+  // Update user settings
+  app.put("/api/settings/:username", async (req, res) => {
+    try {
+      const { username } = req.params;
+      const {
+        basePrice,
+        surgeAlpha,
+        surgeK,
+        humanDiscountPct,
+        slotsPerWindow,
+        timeWindow,
+        slaHours,
+        walletAddress,
+      } = req.body;
+
+      // Check if user exists
+      const existingUser = await db
+        .select()
+        .from(users)
+        .where(eq(users.username, username))
+        .limit(1);
+
+      // Auto-create user if doesn't exist (for demo/development)
+      if (existingUser.length === 0) {
+        await db.insert(users).values({
+          username,
+          displayName: username.charAt(0).toUpperCase() + username.slice(1).replace(/_/g, ' '),
+          selfNullifier: `${username}_nullifier`,
+          verified: false,
+          basePrice,
+          surgeAlpha,
+          surgeK,
+          humanDiscountPct,
+          slotsPerWindow,
+          timeWindow,
+          slaHours,
+          walletAddress,
+        });
+
+        // Return the newly created user settings
+        return res.json({
+          basePrice,
+          surgeAlpha,
+          surgeK,
+          humanDiscountPct,
+          slotsPerWindow,
+          timeWindow,
+          slaHours,
+          walletAddress,
+        });
+      }
+
+      // Update user settings
+      const [updatedUser] = await db
+        .update(users)
+        .set({
+          basePrice,
+          surgeAlpha,
+          surgeK,
+          humanDiscountPct,
+          slotsPerWindow,
+          timeWindow,
+          slaHours,
+          walletAddress,
+        })
+        .where(eq(users.username, username))
+        .returning({
+          basePrice: users.basePrice,
+          surgeAlpha: users.surgeAlpha,
+          surgeK: users.surgeK,
+          humanDiscountPct: users.humanDiscountPct,
+          slotsPerWindow: users.slotsPerWindow,
+          timeWindow: users.timeWindow,
+          slaHours: users.slaHours,
+          walletAddress: users.walletAddress,
+        });
+
+      res.json(updatedUser);
+    } catch (error) {
+      console.error("Error updating user settings:", error);
+      res.status(500).json({ error: "Failed to update settings" });
+    }
+  });
+
   // Get reputation score
   app.get("/api/reputation/:nullifier", async (req, res) => {
     try {

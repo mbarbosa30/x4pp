@@ -38,19 +38,37 @@ export default function SettingsPanel() {
   const [walletAddress, setWalletAddress] = useState("");
   const { toast } = useToast();
 
-  // Load current user settings (mock for now)
+  // For demo purposes, use a default username
+  // In production, this would come from user authentication
+  const currentUsername = "demo_user";
+
+  // Load current user settings from backend
+  const { data: settings, isLoading } = useQuery<UserSettings>({
+    queryKey: ['/api/settings', currentUsername],
+    enabled: !!currentUsername,
+  });
+
+  // Populate form fields when settings are loaded
   useEffect(() => {
-    // TODO: Load from backend
-    // For now using default values
-  }, []);
+    if (settings) {
+      setBasePrice(parseFloat(settings.basePrice) || 0.02);
+      setSurgeAlpha(parseFloat(settings.surgeAlpha) || 0.5);
+      setSurgeK(parseFloat(settings.surgeK) || 5);
+      setHumanDiscountPct(parseFloat(settings.humanDiscountPct) || 80);
+      setSlotsPerWindow(settings.slotsPerWindow || 5);
+      setTimeWindow(settings.timeWindow || "hour");
+      setSlaHours(settings.slaHours || 24);
+      setWalletAddress(settings.walletAddress || "");
+    }
+  }, [settings]);
 
   const saveMutation = useMutation({
     mutationFn: async (settings: Partial<UserSettings>) => {
-      // TODO: Wire up to backend API
-      console.log("Saving settings:", settings);
-      return { success: true };
+      const response = await apiRequest("PUT", `/api/settings/${currentUsername}`, settings);
+      return response.json();
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/settings', currentUsername] });
       toast({
         title: "Settings saved",
         description: "Your preferences have been updated",
@@ -79,6 +97,16 @@ export default function SettingsPanel() {
   };
 
   const currentPrice = basePrice;
+
+  if (isLoading) {
+    return (
+      <Card className="p-6">
+        <div className="text-center py-8 text-muted-foreground">
+          Loading settings...
+        </div>
+      </Card>
+    );
+  }
 
   return (
     <Card className="p-6">
