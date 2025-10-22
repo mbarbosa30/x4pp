@@ -23,12 +23,7 @@ router.post("/", async (req, res) => {
       tokenId: z.string().min(1, "Payment token is required"),
       isPublic: z.boolean(),
       minBasePrice: z.number()
-        .min(0.01, "Minimum bid must be at least $0.01")
-        .max(100, "Minimum bid must be at most $100"),
-      slaHours: z.number()
-        .int("SLA hours must be an integer")
-        .min(1, "SLA must be at least 1 hour")
-        .max(720, "SLA must be at most 720 hours (30 days)"),
+        .min(0.01, "Minimum bid must be at least $0.01"),
     });
 
     const validatedData = registrationSchema.parse(req.body);
@@ -68,7 +63,6 @@ router.post("/", async (req, res) => {
         tokenId: validatedData.tokenId,
         isPublic: validatedData.isPublic,
         minBasePrice: validatedData.minBasePrice.toFixed(2),
-        slaHours: validatedData.slaHours,
         verified: false,
       })
       .returning();

@@ -4,12 +4,11 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { useWallet } from "@/providers/WalletProvider";
-import { Wallet, User, DollarSign, Clock, Coins, Eye, EyeOff } from "lucide-react";
+import { Wallet, User, DollarSign, Coins, Eye, EyeOff } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -28,12 +27,7 @@ const registrationFormSchema = z.object({
   tokenId: z.string().min(1, "Please select a payment token"),
   isPublic: z.boolean(),
   minBasePrice: z.number()
-    .min(0.01, "Minimum bid must be at least $0.01")
-    .max(100, "Minimum bid must be at most $100"),
-  slaHours: z.number()
-    .int("SLA hours must be a whole number")
-    .min(1, "SLA must be at least 1 hour")
-    .max(720, "SLA must be at most 720 hours"),
+    .min(0.01, "Minimum bid must be at least $0.01"),
 });
 
 type RegistrationFormValues = z.infer<typeof registrationFormSchema>;
@@ -70,7 +64,6 @@ export default function Register() {
       tokenId: defaultTokenId,
       isPublic: true,
       minBasePrice: 0.10,
-      slaHours: 24,
     },
   });
 
@@ -287,47 +280,21 @@ export default function Register() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>
-                        Minimum Bid: ${field.value.toFixed(2)} USDC
+                        Minimum Bid Accepted (USDC)
                       </FormLabel>
                       <FormControl>
-                        <Slider
-                          min={0.01}
-                          max={5.00}
-                          step={0.01}
-                          value={[field.value]}
-                          onValueChange={([value]) => field.onChange(value)}
-                          data-testid="slider-min-base-price"
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0.01"
+                          {...field}
+                          value={field.value}
+                          onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                          data-testid="input-min-base-price"
                         />
                       </FormControl>
                       <FormDescription>
                         Lowest bid you'll accept. Senders can bid higher.
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="slaHours"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="flex items-center gap-2">
-                        <Clock className="h-4 w-4" />
-                        Response SLA: {field.value} hours
-                      </FormLabel>
-                      <FormControl>
-                        <Slider
-                          min={1}
-                          max={168}
-                          step={1}
-                          value={[field.value]}
-                          onValueChange={([value]) => field.onChange(value)}
-                          data-testid="slider-sla-hours"
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        Bids expire after this time if not accepted
                       </FormDescription>
                       <FormMessage />
                     </FormItem>

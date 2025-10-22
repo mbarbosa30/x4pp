@@ -22,7 +22,7 @@ export const users = pgTable("users", {
   tokenId: varchar("token_id").references(() => tokens.id), // Preferred payment token (foreign key to tokens)
   isPublic: boolean("is_public").notNull().default(true), // Public profile visibility
   minBasePrice: decimal("min_base_price", { precision: 10, scale: 2 }).notNull().default("0.05"), // Minimum bid amount in USD
-  slaHours: integer("sla_hours").notNull().default(24), // Hours before auto-refund
+  slaHours: integer("sla_hours"), // Optional: Hours before auto-refund (set per-message, not during registration)
   verified: boolean("verified").notNull().default(false),
   verifiedAt: timestamp("verified_at"),
   selfPolicies: text("self_policies"), // JSON: {age_ok, ofac_ok, country_ok}
