@@ -65,6 +65,8 @@ export function generatePaymentRequirements(
   const expiration = Math.floor(Date.now() / 1000) + expirationMinutes * 60;
   // Convert USD to smallest units (0.01 USD = 10000 in 6 decimal token units)
   const amountInSmallestUnits = Math.floor(priceUSD * 1_000_000).toString();
+  
+  console.log(`[generatePaymentRequirements] priceUSD=${priceUSD}, amountInSmallestUnits=${amountInSmallestUnits}`);
 
   return {
     x402Version: X402_CONFIG.version,
