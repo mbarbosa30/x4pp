@@ -11,6 +11,7 @@ import commitRoutes from "./api/commit";
 import inboxRoutes from "./api/inbox";
 import openRoutes from "./api/open";
 import reputationRoutes from "./api/reputation";
+import adminRoutes from "./api/admin";
 import { startRefundMonitor } from "./refunds";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -30,6 +31,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Mount reputation routes
   app.use("/api/reputation", reputationRoutes);
+  
+  // Mount admin routes
+  app.use("/api/admin", adminRoutes);
   
   // Start auto-refund monitor
   startRefundMonitor();
