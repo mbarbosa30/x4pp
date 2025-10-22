@@ -14,7 +14,6 @@ import authRoutes from "./api/auth";
 import tokensRoutes from "./api/tokens";
 import priceGuideRoutes from "./api/price-guide";
 import messagesRoutes from "./api/messages";
-import { startRefundMonitor } from "./services/refunds";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Mount authentication routes
@@ -46,9 +45,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Mount message management routes
   app.use("/api/messages", messagesRoutes);
-  
-  // Start auto-refund monitor
-  startRefundMonitor();
   
   // Get user by username
   app.get("/api/users/:username", async (req, res) => {
@@ -102,26 +98,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .where(eq(users.username, username))
         .limit(1);
 
-      // Auto-create user if doesn't exist (for demo/development)
+      // User doesn't exist - return 404
       if (user.length === 0) {
-        await db.insert(users).values({
-          username,
-          displayName: username.charAt(0).toUpperCase() + username.slice(1).replace(/_/g, ' '),
-          selfNullifier: `${username}_nullifier`,
-          verified: false,
-        });
-
-        // Fetch the newly created user
-        user = await db
-          .select({
-            minBasePrice: users.minBasePrice,
-            slaHours: users.slaHours,
-            walletAddress: users.walletAddress,
-            tokenId: users.tokenId,
-          })
-          .from(users)
-          .where(eq(users.username, username))
-          .limit(1);
+        return res.status(404).json({ error: "User not found. Please register first." });
       }
 
       res.json(user[0]);
@@ -149,26 +128,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .where(eq(users.username, username))
         .limit(1);
 
-      // Auto-create user if doesn't exist (for demo/development)
+      // User doesn't exist - return 404
       if (existingUser.length === 0) {
-        await db.insert(users).values({
-          username,
-          displayName: username.charAt(0).toUpperCase() + username.slice(1).replace(/_/g, ' '),
-          selfNullifier: `${username}_nullifier`,
-          verified: false,
-          minBasePrice,
-          slaHours,
-          walletAddress,
-          tokenId,
-        });
-
-        // Return the newly created user settings
-        return res.json({
-          minBasePrice,
-          slaHours,
-          walletAddress,
-          tokenId,
-        });
+        return res.status(404).json({ error: "User not found. Please register first." });
       }
 
       // Update user settings
