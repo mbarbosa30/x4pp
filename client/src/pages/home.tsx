@@ -46,8 +46,8 @@ export default function Home() {
     logoutMutation.mutate();
   };
 
-  // Show loading state while checking authentication
-  if (isLoadingAuth) {
+  // Show loading state while checking authentication OR if data is still loading
+  if (isLoadingAuth || (isAuthenticated && !user)) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-muted-foreground">Loading...</div>
@@ -55,8 +55,8 @@ export default function Home() {
     );
   }
 
-  // Show login prompt if not authenticated
-  if (!isAuthenticated || !user) {
+  // Show login prompt ONLY if we're sure they're not authenticated (not loading and no user)
+  if (!isLoadingAuth && !isAuthenticated && !user) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <Card className="p-8 max-w-md w-full text-center space-y-4">
