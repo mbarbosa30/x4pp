@@ -128,7 +128,7 @@ export default function ComposeMessage({ isVerified, onSend }: ComposeMessagePro
       // Step 1: Generate commit payload with bid amount and expiration
       const commitRequest = {
         recipientUsername: recipient,
-        senderNullifier: isVerified ? "demo_verified_user_001" : undefined,
+        senderWallet: walletAddress, // Use connected wallet address as identifier
         senderName: "Demo Sender",
         content: message,
         bidUsd: bidAmount.toFixed(2),

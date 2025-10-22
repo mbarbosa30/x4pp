@@ -17,22 +17,18 @@ router.get("/pending", async (req, res) => {
       return res.status(401).json({ error: "Authentication required" });
     }
 
-    // Get user's identifier (selfNullifier or ID - same logic as commit)
+    // Get user's wallet address for message routing
     const [user] = await db
       .select({
-        id: users.id,
-        selfNullifier: users.selfNullifier,
+        walletAddress: users.walletAddress,
       })
       .from(users)
       .where(eq(users.id, userId))
       .limit(1);
 
-    if (!user) {
-      return res.status(404).json({ error: "User not found" });
+    if (!user || !user.walletAddress) {
+      return res.status(404).json({ error: "User not found or wallet not configured" });
     }
-
-    // Use same identifier logic as commit endpoint
-    const recipientIdentifier = user.selfNullifier || user.id;
 
     // Get pending messages sorted by bid descending
     const pendingMessages = await db
@@ -40,7 +36,7 @@ router.get("/pending", async (req, res) => {
       .from(messages)
       .where(
         and(
-          eq(messages.recipientNullifier, recipientIdentifier),
+          eq(messages.recipientWallet, user.walletAddress.toLowerCase()),
           eq(messages.status, "pending")
         )
       )
@@ -66,23 +62,18 @@ router.post("/:messageId/accept", async (req, res) => {
 
     const { messageId } = req.params;
 
-    // Get user's identifier (selfNullifier or ID - same logic as commit)
+    // Get user's wallet address for verification
     const [user] = await db
       .select({
-        id: users.id,
-        selfNullifier: users.selfNullifier,
         walletAddress: users.walletAddress,
       })
       .from(users)
       .where(eq(users.id, userId))
       .limit(1);
 
-    if (!user) {
-      return res.status(404).json({ error: "User not found" });
+    if (!user || !user.walletAddress) {
+      return res.status(404).json({ error: "User not found or wallet not configured" });
     }
-
-    // Use same identifier logic as commit endpoint
-    const recipientIdentifier = user.selfNullifier || user.id;
 
     // Get message
     const [message] = await db
@@ -95,8 +86,8 @@ router.post("/:messageId/accept", async (req, res) => {
       return res.status(404).json({ error: "Message not found" });
     }
 
-    // Verify ownership
-    if (message.recipientNullifier !== recipientIdentifier) {
+    // Verify ownership (compare wallet addresses - case insensitive)
+    if (message.recipientWallet?.toLowerCase() !== user.walletAddress.toLowerCase()) {
       return res.status(403).json({ error: "Not authorized to accept this message" });
     }
 
@@ -172,22 +163,18 @@ router.post("/:messageId/decline", async (req, res) => {
     const { messageId } = req.params;
     const { reason } = req.body;
 
-    // Get user's identifier (selfNullifier or ID - same logic as commit)
+    // Get user's wallet address for verification
     const [user] = await db
       .select({
-        id: users.id,
-        selfNullifier: users.selfNullifier,
+        walletAddress: users.walletAddress,
       })
       .from(users)
       .where(eq(users.id, userId))
       .limit(1);
 
-    if (!user) {
-      return res.status(404).json({ error: "User not found" });
+    if (!user || !user.walletAddress) {
+      return res.status(404).json({ error: "User not found or wallet not configured" });
     }
-
-    // Use same identifier logic as commit endpoint
-    const recipientIdentifier = user.selfNullifier || user.id;
 
     // Get message
     const [message] = await db
@@ -200,8 +187,8 @@ router.post("/:messageId/decline", async (req, res) => {
       return res.status(404).json({ error: "Message not found" });
     }
 
-    // Verify ownership
-    if (message.recipientNullifier !== recipientIdentifier) {
+    // Verify ownership (compare wallet addresses - case insensitive)
+    if (message.recipientWallet?.toLowerCase() !== user.walletAddress.toLowerCase()) {
       return res.status(403).json({ error: "Not authorized to decline this message" });
     }
 
