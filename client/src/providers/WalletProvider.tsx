@@ -54,8 +54,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         // Handle new wallet connection or account switch
         if (account.isConnected && account.address) {
           // If it's a new address or first connection, try auto-login
-          // But ONLY if we're on the landing page
-          if ((!previousAddress || account.address !== previousAddress) && window.location.pathname === '/') {
+          if (!previousAddress || account.address !== previousAddress) {
             try {
               const response = await fetch('/api/auth/login', {
                 method: 'POST',
@@ -71,21 +70,29 @@ export function WalletProvider({ children }: { children: ReactNode }) {
                 // Pre-populate the auth cache to prevent loading state
                 queryClient.setQueryData(['/api/auth/me'], data);
                 
-                // Navigate to dashboard (no page reload)
-                setLocation('/app');
+                // If on landing page, navigate to dashboard
+                if (window.location.pathname === '/') {
+                  setLocation('/app');
+                }
+                // Otherwise stay on current page (e.g., /send)
               } else {
-                // User not registered - show prompt and redirect to registration
+                // User not registered
                 console.log('No account found for this wallet');
-                toast({
-                  title: "Account Not Found",
-                  description: "Please register to start using x4pp",
-                  variant: "default",
-                });
                 
-                // Redirect to registration page after a short delay
-                setTimeout(() => {
-                  setLocation('/register');
-                }, 1500);
+                // Only redirect to register if on landing page or protected pages
+                const currentPath = window.location.pathname;
+                if (currentPath === '/' || currentPath === '/app' || currentPath.startsWith('/app/')) {
+                  toast({
+                    title: "Account Not Found",
+                    description: "Please register to start using x4pp",
+                    variant: "default",
+                  });
+                  
+                  setTimeout(() => {
+                    setLocation('/register');
+                  }, 1500);
+                }
+                // If on public pages like /send, just stay there
               }
             } catch (loginError) {
               console.log('Auto-login failed:', loginError);
