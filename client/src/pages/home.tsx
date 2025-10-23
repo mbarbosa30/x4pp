@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -11,13 +11,32 @@ import { useWallet } from "@/providers/WalletProvider";
 import InboxPending from "@/pages/inbox-pending";
 import Outbox from "@/pages/outbox";
 import SettingsPanel from "@/components/SettingsPanel";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState("inbox");
+  const [location, setLocation] = useLocation();
+  
+  // Check URL parameter for initial tab
+  const getTabFromUrl = () => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('tab') || "inbox";
+  };
+  
+  const [activeTab, setActiveTab] = useState(getTabFromUrl());
   const { user, isAuthenticated, isLoading } = useAuth();
   const { disconnect } = useWallet();
   const { toast } = useToast();
+
+  // Sync activeTab with URL changes
+  useEffect(() => {
+    setActiveTab(getTabFromUrl());
+  }, [location]);
+  
+  // Handle tab change and update URL
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab);
+    setLocation(`/app?tab=${tab}`);
+  };
 
   const logoutMutation = useMutation({
     mutationFn: async () => {
@@ -121,7 +140,7 @@ export default function Home() {
       {/* Main Content */}
       <main className="container mx-auto px-4 py-6">
         <div className="max-w-6xl mx-auto">
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <Tabs value={activeTab} onValueChange={handleTabChange}>
             <TabsList className="mb-6 w-full sm:w-auto grid grid-cols-3 sm:flex h-11">
               <TabsTrigger value="inbox" data-testid="tab-inbox" className="gap-2">
                 <Inbox className="h-4 w-4" />

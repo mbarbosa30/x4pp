@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useLocation } from "wouter";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -10,6 +11,7 @@ import { Send, Shield, Wallet, TrendingUp, Info, Clock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { useWallet } from "@/providers/WalletProvider";
+import { useAuth } from "@/hooks/useAuth";
 import { signTransferAuthorization, parseSignature } from "@/lib/eip-3009";
 
 interface ComposeMessageProps {
@@ -37,6 +39,8 @@ export default function ComposeMessage({ isVerified, onSend, initialRecipient }:
   const [expirationHours, setExpirationHours] = useState(24); // Default: 24 hours
   const { toast } = useToast();
   const { address: walletAddress, isConnected, connect } = useWallet();
+  const { isAuthenticated } = useAuth();
+  const [, setLocation] = useLocation();
   
   // x402 payment flow state
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -315,6 +319,13 @@ export default function ComposeMessage({ isVerified, onSend, initialRecipient }:
 
         if (onSend) {
           onSend(recipient, message, includeReplyBounty ? replyBounty : 0);
+        }
+        
+        // Navigate to outbox if user is authenticated (registered)
+        if (isAuthenticated) {
+          setTimeout(() => {
+            setLocation('/app?tab=outbox');
+          }, 1500); // Wait 1.5s to show toast first
         }
       } else {
         const error = await response.json();
