@@ -2,12 +2,32 @@ import { Button } from '@/components/ui/button';
 import { Wallet } from 'lucide-react';
 import { useWallet } from '@/providers/WalletProvider';
 import { useLocation } from 'wouter';
+import { useEffect, useRef } from 'react';
+import { useQuery } from '@tanstack/react-query';
 
 export function ConnectButton() {
-  const { isConnected, address, connect, disconnect } = useWallet();
+  const { isConnected, address, connect, disconnect, login } = useWallet();
   const [, setLocation] = useLocation();
+  const { data: currentUser } = useQuery({ queryKey: ['/api/auth/me'], enabled: isConnected });
+  const hasManuallyDisconnected = useRef(false);
+
+  // Auto-login when wallet connects (only if we haven't manually disconnected)
+  useEffect(() => {
+    if (isConnected && address && !currentUser && !hasManuallyDisconnected.current) {
+      console.log('[ConnectButton] Wallet connected, logging in...');
+      login();
+    }
+  }, [isConnected, address, currentUser, login]);
+
+  // Reset flag when wallet actually disconnects
+  useEffect(() => {
+    if (!isConnected) {
+      hasManuallyDisconnected.current = false;
+    }
+  }, [isConnected]);
 
   const handleDisconnect = async () => {
+    hasManuallyDisconnected.current = true;
     await disconnect();
     setLocation('/');
   };

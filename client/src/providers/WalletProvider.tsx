@@ -37,6 +37,7 @@ interface WalletContextType {
   isConnecting: boolean;
   connect: () => Promise<void>;
   disconnect: () => Promise<void>;
+  login: () => Promise<void>;
 }
 
 const WalletContext = createContext<WalletContextType | null>(null);
@@ -49,7 +50,7 @@ function WalletProviderInner({ children }: { children: ReactNode }) {
   const [isDisconnecting, setIsDisconnecting] = useState(false);
   const [, setLocation] = useLocation();
 
-  // Auto-login when wallet connects (but not after manual disconnect)
+  // Monitor connection state
   useEffect(() => {
     console.log('[WalletProvider] State changed:', { 
       isConnected, 
@@ -58,30 +59,9 @@ function WalletProviderInner({ children }: { children: ReactNode }) {
       timestamp: new Date().toISOString()
     });
     
-    // Don't auto-login if user is in the middle of disconnecting
-    if (isConnected && address && !isDisconnecting) {
-      console.log('[WalletProvider] Attempting auto-login...');
-      fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ walletAddress: address }),
-      }).then(async (res) => {
-        if (res.ok) {
-          const data = await res.json();
-          console.log('[WalletProvider] Auto-login successful:', data);
-          queryClient.setQueryData(['/api/auth/me'], data);
-        } else {
-          console.error('[WalletProvider] Auto-login failed:', res.status);
-        }
-      }).catch(err => {
-        console.error('[WalletProvider] Auto-login error:', err);
-      });
-    }
-    
-    // Reset disconnecting flag when wallet is fully disconnected
-    if (!isConnected && isDisconnecting) {
-      console.log('[WalletProvider] Wallet fully disconnected, resetting flag');
-      setIsDisconnecting(false);
+    // When wallet disconnects, clear session
+    if (!isConnected && !isDisconnecting) {
+      queryClient.setQueryData(['/api/auth/me'], null);
     }
   }, [isConnected, address, isDisconnecting]);
 
@@ -95,6 +75,28 @@ function WalletProviderInner({ children }: { children: ReactNode }) {
       throw error;
     } finally {
       setIsConnecting(false);
+    }
+  };
+
+  const handleLogin = async () => {
+    if (!isConnected || !address) {
+      console.log('[WalletProvider] Cannot login: wallet not connected');
+      return;
+    }
+    
+    console.log('[WalletProvider] Manual login...');
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ walletAddress: address }),
+    });
+    
+    if (res.ok) {
+      const data = await res.json();
+      console.log('[WalletProvider] Login successful:', data);
+      queryClient.setQueryData(['/api/auth/me'], data);
+    } else {
+      console.error('[WalletProvider] Login failed:', res.status);
     }
   };
 
@@ -127,6 +129,7 @@ function WalletProviderInner({ children }: { children: ReactNode }) {
         isConnecting,
         connect: handleConnect,
         disconnect: handleDisconnect,
+        login: handleLogin,
       }}
     >
       {children}
