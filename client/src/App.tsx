@@ -4,6 +4,8 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { WalletProvider } from "@/providers/WalletProvider";
+import { WagmiProvider } from 'wagmi';
+import { wagmiAdapter } from "./lib/reown-config";
 import Landing from "@/pages/landing";
 import Home from "@/pages/home";
 import Send from "@/pages/send";
@@ -35,12 +37,14 @@ function Router() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <WalletProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Router />
-        </TooltipProvider>
-      </WalletProvider>
+      <WagmiProvider config={wagmiAdapter.wagmiConfig}>
+        <WalletProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Router />
+          </TooltipProvider>
+        </WalletProvider>
+      </WagmiProvider>
     </QueryClientProvider>
   );
 }

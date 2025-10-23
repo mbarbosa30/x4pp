@@ -1,5 +1,4 @@
 import { createContext, useContext, useEffect, ReactNode } from "react";
-import { WagmiProvider } from 'wagmi';
 import { useAppKitAccount } from '@reown/appkit/react';
 import { disconnect } from '@wagmi/core';
 import { wagmiAdapter } from "@/lib/reown-config";
@@ -54,11 +53,9 @@ function WalletProviderInner({ children }: { children: ReactNode }) {
 
 export function WalletProvider({ children }: { children: ReactNode }) {
   return (
-    <WagmiProvider config={wagmiAdapter.wagmiConfig}>
-      <WalletProviderInner>
-        {children}
-      </WalletProviderInner>
-    </WagmiProvider>
+    <WalletProviderInner>
+      {children}
+    </WalletProviderInner>
   );
 }
 

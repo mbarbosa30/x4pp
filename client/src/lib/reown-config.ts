@@ -32,7 +32,7 @@ export const wagmiAdapter = new WagmiAdapter({
 });
 
 // Create modal - MUST be outside React components
-createAppKit({
+export const appKit = createAppKit({
   adapters: [wagmiAdapter],
   networks,
   projectId,
