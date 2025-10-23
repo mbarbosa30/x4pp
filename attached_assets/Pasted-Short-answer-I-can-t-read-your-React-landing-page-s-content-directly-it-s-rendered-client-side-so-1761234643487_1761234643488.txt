@@ -1,0 +1,164 @@
+Short answer: I can’t read your React landing page’s content directly (it’s rendered client-side, so my fetch returns an empty HTML shell). So I can’t grade the exact copy that’s live.
+
+That said, here’s a tight, step-by-step checklist and drop-in copy to ensure x4pp’s page clearly communicates the value, and references the tech/innovation you’re using (Celo + USDC, EIP-3009 deferred auth, Self-x402 facilitator). If your page already does most of this, great—just skim the gaps.
+
+⸻
+
+What the landing page must do (quick checklist)
+
+Above the fold (first screen)
+	•	Clear one-line value prop for both sides:
+	•	Receivers: “Get paid to read DMs.”
+	•	Senders: “Reach any wallet, no signup—pay only if opened.”
+	•	Subhead that names the tech edge (in plain English).
+	•	Primary CTA (“Open your inbox” / “Try a demo”) + secondary CTA (“How it works”).
+	•	One sentence of safety: “Funds don’t move unless the receiver opens.”
+
+Middle of page
+	•	3-step how-it-works for Senders and Receivers (separate columns).
+	•	“Why it’s different” (open bidding, no custodial escrow, gasless auth for sender).
+	•	“Under the hood” tech box (Celo USDC + EIP-3009 + deferred settle via Self-x402 Facilitator).
+	•	Social proof / credibility (logos, tiny roadmap, or a short quote).
+
+Bottom
+	•	FAQ (gas fees, expiry/refund, messaging any wallet, security/privacy).
+	•	Clear secondary CTA.
+	•	Links to docs/GitHub.
+
+⸻
+
+Drop-in copy (feel free to paste/tweak)
+
+Hero
+
+Headline:
+Get paid for your attention.
+
+Subhead:
+x4pp is a peer-to-peer DM inbox where senders bid to message you in USDC on Celo. Money only moves if you open before the deadline—powered by EIP-3009 (deferred authorization) and our Self-x402 Facilitator.
+
+Primary CTA: Open your inbox
+Secondary CTA: See how it works
+
+Tiny reassurance line:
+No escrow. No subscription. Funds stay with the sender until you open.
+
+⸻
+
+Two audiences (split section)
+
+For receivers (wallet owners)
+	•	Set your minimum price.
+	•	Get a queue of open bids.
+	•	Open → instant USDC to your wallet. Ignore or let bids expire—no action needed.
+
+For senders
+	•	Message any wallet address—no prior signup.
+	•	See a live price guide (min/P25/median/P75).
+	•	Sign a gasless authorization (EIP-3009). Pay only if they open.
+
+⸻
+
+How it works (3 steps each)
+
+Sender
+	1.	Choose a recipient wallet (or username) and enter your bid.
+	2.	Sign an EIP-3009 authorization (no on-chain tx; no USDC leaves your wallet).
+	3.	Your message sits pending. If the receiver opens before the deadline, USDC transfers. If not, the authorization expires—no refund needed.
+
+Receiver
+	1.	Visit with your wallet to claim your inbox (simple signature).
+	2.	See pending bids sorted by amount and reputation facts.
+	3.	Open to accept (settles on-chain) or ignore and let it expire.
+
+⸻
+
+Why x4pp is different
+	•	Open bidding, not fixed fees: senders pick their price; receivers decide.
+	•	No custodial escrow: the authorization itself is the escrow (EIP-3009).
+	•	Gasless for senders: a typed-data signature authorizes USDC; the receiver (or relayer) pays gas on accept.
+	•	Any wallet can be messaged: even if they’ve never used x4pp; they can claim later and accept.
+	•	Privacy-first: we don’t move funds or expose data unless the receiver opens.
+
+⸻
+
+Under the hood (tech & innovation)
+	•	Celo mainnet + USDC (6 decimals): fast, low-cost stablecoin rails.
+	•	EIP-3009 (TransferWithAuthorization): sender signs a deferred voucher; we replay it exactly on open.
+	•	Self-x402 Facilitator: verifies and stores vouchers; settles them only upon acceptance—aligns with the x402 deferred scheme.
+	•	(Optional later) Self verification discount tiers (ZK human proofs) and anti-sybil controls.
+
+⸻
+
+FAQ (short answers)
+	•	Do I pay gas to send? No. You sign a typed-data authorization; gas is paid on the receiver’s accept (relayer can cover).
+	•	What if the receiver never opens? Your authorization expires at the deadline; no USDC moves.
+	•	Can I message any wallet? Yes. If they haven’t joined x4pp yet, your bid sits pending; they can claim later and accept.
+	•	Is my money safe while pending? Yes—USDC stays in your wallet. The signed voucher is only usable as-is and only before its expiry.
+	•	What prevents abuse? One active bid per sender→recipient, blocklists, and reputation facts.
+
+⸻
+
+Visual/layout tips (fast wins)
+	•	Show a mock inbox with two pending cards: “$0.12 • 23h left” and “$0.34 • 6h left”.
+	•	Opposite side: the sender flow with a price guide mini-chart (Min / P25 / Median / P75).
+	•	Keep the tech box compact with recognizable badges: Celo, USDC, EIP-3009, x402.
+
+⸻
+
+SEO & social share (paste into <head>)
+
+<title>x4pp — Get paid for your attention</title>
+<meta name="description" content="A peer-to-peer DM inbox on Celo where senders bid in USDC. Funds only move if you open. Powered by EIP-3009 deferred authorizations and a Self-x402 facilitator." />
+<link rel="canonical" href="https://x4pp.xyz" />
+
+<!-- Open Graph -->
+<meta property="og:type" content="website" />
+<meta property="og:title" content="x4pp — Get paid for your attention" />
+<meta property="og:description" content="Senders bid to message you in USDC. Money only moves if you open. Celo + EIP-3009 + x402." />
+<meta property="og:url" content="https://x4pp.xyz" />
+<meta property="og:image" content="https://x4pp.xyz/og/x4pp-hero.png" />
+
+<!-- Twitter -->
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="x4pp — Get paid for your attention" />
+<meta name="twitter:description" content="A peer-to-peer DM inbox with open bidding and gasless authorizations on Celo USDC." />
+<meta name="twitter:image" content="https://x4pp.xyz/og/x4pp-hero.png" />
+
+<!-- Optional Schema.org -->
+<script type="application/ld+json">
+{
+  "@context":"https://schema.org",
+  "@type":"SoftwareApplication",
+  "name":"x4pp",
+  "applicationCategory":"WebApplication",
+  "operatingSystem":"Web",
+  "url":"https://x4pp.xyz",
+  "description":"Peer-to-peer DM inbox where senders bid in USDC; funds only move if the receiver opens.",
+  "offers":{"@type":"Offer","price":"0","priceCurrency":"USD"}
+}
+</script>
+
+
+⸻
+
+Micro-copy you can reuse in the UI
+	•	Banner (reassurance): “No funds move unless you open.”
+	•	Guide hint: “Most bids land $p25–$p75 (median $median). Minimum $min.”
+	•	Pending card: “$0.34 • 6h left • From @alice • ‘Project intro…’”
+	•	Empty state (receiver): “Your inbox is ready. Share your wallet to start receiving paid DMs.”
+
+⸻
+
+Quick self-audit (5 minutes)
+	•	Can a first-time visitor explain x4pp in one sentence after 5 seconds?
+	•	Is there a single CTA that reflects the main job?
+	•	Are “how it works” steps visible without scrolling too far?
+	•	Does the page explicitly say USDC on Celo, EIP-3009 deferred authorization, x402-style facilitator?
+	•	Does it explain no funds move unless opened?
+	•	Do you show a live example or animation of a pending bid?
+	•	Do OG tags render a clean preview on Twitter/Telegram/Discord?
+
+⸻
+
+If you’d like, paste the current hero + first fold copy here and I’ll mark it up line-by-line—keeping your tone but tightening clarity, benefits, and the tech shout-outs
