@@ -1,0 +1,226 @@
+I dug into your repo and the Reown docs. Here’s what’s (almost certainly) breaking your wallet connect, plus precise fixes you can drop in.
+
+> tl;dr: your landing-page query invalidation created extra re-renders, which repeatedly **re-initialized** the wallet plumbing (wagmi config / Reown AppKit instance). That tears down the WalletConnect session mid-handshake, so `isConnected` stays `false` with no errors. The cure is to make the wallet layer true singletons and let TanStack Query key by `address` instead of manual invalidation.
+
+---
+
+# What’s wrong (and why it looks “silent”)
+
+## 1) The wallet stack is being re-created
+
+Reown + wagmi must be initialized **once**. If your `WalletProvider` (or a parent) recreates any of these on every render/HMR update…
+
+* `new QueryClient()`
+* `createConfig(...)` (wagmi)
+* `createAppKit(...)` (Reown AppKit)
+* `<WagmiProvider key=...>` or conditional mounting
+
+…then any refetch/invalidation on the landing page can cause a re-render that **replaces** the wallet config mid-session. You’ll only see logs like “state: { isConnected: false }” and no error—because the new instance has no session.
+
+Your repo’s README tagline is visible, so I could reach the project, but GitHub’s UI didn’t render the individual TSX files through this browser (content widgets error out). I’m basing the diagnosis on the exact symptoms you reported and Reown/wagmi’s init rules. Repo is reachable here. ([GitHub][1])
+
+## 2) The “invalidate on address change” loop is too aggressive
+
+You added:
+
+* `staleTime: 0` + `gcTime: 0` on the wallet-lookup query
+* a `useEffect` that **invalidates** on every `address` change
+
+This causes rapid refetch → re-render. If the wallet config isn’t a singleton, each re-render can re-init AppKit/wagmi, dropping the session. That’s why connect never completes.
+
+## 3) Server cache headers aren’t the cause
+
+Your `Cache-Control: no-store` on `/api/users/wallet/:address` is fine. Reown/WalletConnect uses a separate relayer/websocket; those headers don’t affect the handshake.
+
+## 4) Common gotchas that amplify the issue
+
+* Creating singletons *inside* components instead of module scope / `useState(()=>…)`
+* Using an AppKit package intended for another adapter (e.g., not `@reown/appkit/react` with the Wagmi adapter) or being below **v1.7.0** (upgrade note). ([docs.reown.com][2])
+* HMR re-mounting providers without an HMR-safe singleton guard (Dev only).
+
+---
+
+# Fix it: exact pattern (copy these)
+
+## A) Make wallet/AppKit/wagmi **singletons** (HMR-safe)
+
+Create them at **module scope** (or in a `globalThis` cache for dev):
+
+```tsx
+// client/src/providers/WalletProvider.tsx
+import { WagmiProvider, createConfig } from 'wagmi';
+import { celo, celoAlfajores } from 'viem/chains';
+import { http } from 'viem';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+// If you use the React adapter:
+import { createAppKit } from '@reown/appkit/react';
+// If using core, adjust import to '@reown/appkit'
+
+type Singletons = {
+  queryClient: QueryClient;
+  wagmiConfig: ReturnType<typeof createConfig>;
+  appKit: ReturnType<typeof createAppKit>;
+};
+
+// HMR-safe globals in dev
+const g = globalThis as unknown as { __x4pp?: Singletons };
+if (!g.__x4pp) {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        staleTime: 10_000,
+        gcTime: 300_000,
+        refetchOnReconnect: 'always',
+        refetchOnWindowFocus: false,
+      },
+    },
+  });
+
+  const wagmiConfig = createConfig({
+    chains: [celo, celoAlfajores],
+    transports: {
+      [celo.id]: http('https://forno.celo.org'),
+      [celoAlfajores.id]: http('https://alfajores-forno.celo-testnet.org'),
+    },
+    ssr: false,
+  });
+
+  const appKit = createAppKit({
+    projectId: import.meta.env.VITE_WC_PROJECT_ID!,
+    wagmiConfig, // adapter picks this up
+    // metadata, features, etc.
+  });
+
+  g.__x4pp = { queryClient, wagmiConfig, appKit };
+}
+
+const { queryClient, wagmiConfig } = g.__x4pp!;
+
+export function WalletProvider({ children }: { children: React.ReactNode }) {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <WagmiProvider config={wagmiConfig}>{children}</WagmiProvider>
+    </QueryClientProvider>
+  );
+}
+```
+
+**Notes**
+
+* Ensure you’re on AppKit ≥ **v1.7.0**; the docs explicitly advise initializing **outside** React to avoid rerenders breaking things. ([docs.reown.com][3])
+* Don’t change keys on `<WagmiProvider>` or conditionally mount it.
+
+## B) Replace manual invalidation with **address-keyed** query
+
+In `landing.tsx`:
+
+```tsx
+import { useAccount } from 'wagmi';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useRef } from 'react';
+import { useNavigate } from 'wouter';
+
+export default function Landing() {
+  const { address, isConnected } = useAccount();
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const prevAddrRef = useRef<string | undefined>();
+
+  const { data, isFetching, isError } = useQuery({
+    queryKey: ['userByWallet', address], // key by address
+    enabled: Boolean(isConnected && address),
+    queryFn: async () => {
+      const r = await fetch(`/api/users/wallet/${address}`, {
+        headers: { 'Cache-Control': 'no-store' }
+      });
+      if (!r.ok) throw new Error('lookup failed');
+      return r.json(); // { exists: boolean, ... }
+    },
+    staleTime: 10_000,
+    gcTime: 300_000,
+    refetchOnMount: 'always',
+    refetchOnReconnect: 'always'
+  });
+
+  // On disconnect, drop the old address cache to avoid stale redirects
+  useEffect(() => {
+    const prev = prevAddrRef.current;
+    if (!isConnected && prev) {
+      queryClient.removeQueries({ queryKey: ['userByWallet', prev] });
+    }
+    prevAddrRef.current = address;
+  }, [isConnected, address, queryClient]);
+
+  useEffect(() => {
+    if (!(isConnected && address)) return;
+    if (isFetching || isError) return;
+
+    if (data?.exists) navigate('/app');
+    else navigate('/register');
+  }, [isConnected, address, isFetching, isError, data, navigate]);
+
+  return /* hero + connect button */;
+}
+```
+
+**Delete** the old `useEffect(invalidateQueries)` and avoid `staleTime: 0, gcTime: 0`.
+
+## C) Connect button: don’t create connectors on click
+
+Call the modal (or wagmi `connect`) using the **existing** connector instance. No in-render instantiation.
+
+```tsx
+import { useConnect } from 'wagmi';
+
+export function ConnectButton() {
+  const { connect, connectors, isPending } = useConnect();
+  const injected = connectors.find(c => c.id === 'injected'); // or AppKit connector id
+
+  return (
+    <button
+      onClick={() => injected && connect({ connector: injected })}
+      disabled={!injected || isPending}
+      className="btn btn-primary"
+    >
+      {isPending ? 'Connecting…' : 'Connect Wallet'}
+    </button>
+  );
+}
+```
+
+## D) API headers are fine; just add `Vary`
+
+Keep:
+
+```
+Cache-Control: no-store, no-cache, must-revalidate, private
+Pragma: no-cache
+Expires: 0
+Vary: Cookie, Authorization
+```
+
+This prevents any proxy from caching user-specific wallet lookup.
+
+---
+
+# Sanity checks (run these right now)
+
+* Add a one-time log right after you create the singletons:
+  `console.log('WALLET INIT')`. You should see it **once** per full reload (not on every refetch).
+* Comment out your old invalidate-effect and try to connect: it should work again.
+* In dev tools → Network, ensure `/api/users/wallet/:address` fires **once** per address change (not a storm).
+* Wagmi `status` should move `connecting → connected` without bouncing back to `false`.
+
+---
+
+# Why this matches the Reown guidance
+
+Reown’s AppKit docs (React) explicitly say to create AppKit/wagmi **outside** React to avoid “unwanted rerenders.” The WalletConnect-to-Reown migration note advises removing old modal packages and running AppKit ≥ v1.7.0. Following that + stable singletons eliminates the “connect never completes” behavior you saw. ([docs.reown.com][3])
+
+---
+
+If you paste your current `WalletProvider.tsx` and `landing.tsx` here, I’ll line-edit them to the exact working versions with your imports and env names intact.
+
+[1]: https://github.com/mbarbosa30/x4pp "GitHub - mbarbosa30/x4pp: x402 powered messaging app. Attention Markets, Simplified."
+[2]: https://docs.reown.com/appkit/upgrade/wcm?utm_source=chatgpt.com "WalletConnect Modal to Reown AppKit Core"
+[3]: https://docs.reown.com/appkit/react/core/installation?utm_source=chatgpt.com "Installation"

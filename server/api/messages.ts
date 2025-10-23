@@ -70,6 +70,72 @@ router.get("/sent", async (req, res) => {
 });
 
 /**
+ * GET /api/messages/accepted
+ * Get accepted messages for the authenticated user (messages they've received and accepted)
+ */
+router.get("/accepted", async (req, res) => {
+  try {
+    const userId = (req as any).session?.userId;
+    if (!userId) {
+      return res.status(401).json({ error: "Authentication required" });
+    }
+
+    // Get user's wallet address for message routing
+    const [user] = await db
+      .select({
+        walletAddress: users.walletAddress,
+      })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+
+    if (!user || !user.walletAddress) {
+      return res.status(404).json({ error: "User not found or wallet not configured" });
+    }
+
+    // Get accepted messages with sender info
+    const acceptedMessages = await db
+      .select({
+        id: messages.id,
+        senderWallet: messages.senderWallet,
+        recipientWallet: messages.recipientWallet,
+        senderName: messages.senderName,
+        senderEmail: messages.senderEmail,
+        content: messages.content,
+        bidUsd: messages.bidUsd,
+        replyBounty: messages.replyBounty,
+        status: messages.status,
+        sentAt: messages.sentAt,
+        acceptedAt: messages.acceptedAt,
+        // Sender profile info (if registered)
+        senderDisplayName: users.displayName,
+        senderUsername: users.username,
+      })
+      .from(messages)
+      .leftJoin(users, sql`lower(${users.walletAddress}) = ${messages.senderWallet}`)
+      .where(
+        and(
+          eq(messages.recipientWallet, user.walletAddress.toLowerCase()),
+          eq(messages.status, "accepted")
+        )
+      )
+      .orderBy(desc(messages.acceptedAt));
+
+    // Serialize timestamps to ISO strings for proper frontend handling
+    const serializedMessages = acceptedMessages.map(msg => ({
+      ...msg,
+      sentAt: msg.sentAt ? msg.sentAt.toISOString() : null,
+      acceptedAt: msg.acceptedAt?.toISOString() || null,
+    }));
+
+    res.json(serializedMessages);
+  } catch (error) {
+    console.error("Error fetching accepted messages:", error);
+    res.status(500).json({ error: "Failed to fetch accepted messages" });
+  }
+});
+
+/**
  * GET /api/messages/pending
  * Get pending messages for the authenticated user sorted by bid (descending)
  */

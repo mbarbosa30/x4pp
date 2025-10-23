@@ -9,6 +9,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useWallet } from "@/providers/WalletProvider";
 import InboxPending from "@/pages/inbox-pending";
+import InboxAccepted from "@/pages/inbox-accepted";
 import Outbox from "@/pages/outbox";
 import SettingsPanel from "@/components/SettingsPanel";
 import { Link, useLocation } from "wouter";
@@ -157,7 +158,22 @@ export default function Home() {
             </TabsList>
 
             <TabsContent value="inbox" className="mt-0">
-              <InboxPending />
+              <Tabs defaultValue="pending" className="w-full">
+                <TabsList className="mb-4">
+                  <TabsTrigger value="pending" data-testid="tab-inbox-pending">
+                    Pending
+                  </TabsTrigger>
+                  <TabsTrigger value="accepted" data-testid="tab-inbox-accepted">
+                    Accepted
+                  </TabsTrigger>
+                </TabsList>
+                <TabsContent value="pending" className="mt-0">
+                  <InboxPending />
+                </TabsContent>
+                <TabsContent value="accepted" className="mt-0">
+                  <InboxAccepted />
+                </TabsContent>
+              </Tabs>
             </TabsContent>
 
             <TabsContent value="outbox" className="mt-0">
