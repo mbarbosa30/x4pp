@@ -25,14 +25,48 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     // Initialize account state
     const account = getAccount(wagmiConfig);
+    console.log('WalletProvider: Initial account state', { 
+      address: account.address, 
+      isConnected: account.isConnected 
+    });
     setAddress(account.address);
     setIsConnected(account.isConnected);
+    
+    // If already connected on mount, trigger auto-login
+    if (account.isConnected && account.address) {
+      console.log('WalletProvider: Already connected on mount, attempting auto-login');
+      fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ walletAddress: account.address }),
+        credentials: 'include',
+      }).then(async response => {
+        if (response.ok) {
+          const data = await response.json();
+          console.log('Auto-logged in on mount as:', data.user.username);
+          queryClient.setQueryData(['/api/auth/me'], data);
+          
+          if (window.location.pathname === '/') {
+            setLocation('/app');
+          }
+        } else {
+          console.log('No account found for connected wallet on mount');
+        }
+      }).catch(err => {
+        console.error('Auto-login on mount failed:', err);
+      });
+    }
 
     // Watch for account changes
     const unwatch = watchAccount(wagmiConfig, {
       async onChange(account) {
         const previousAddress = address;
         const previousConnected = isConnected;
+        
+        console.log('WalletProvider: Account changed', {
+          from: { address: previousAddress, connected: previousConnected },
+          to: { address: account.address, connected: account.isConnected }
+        });
         
         setAddress(account.address);
         setIsConnected(account.isConnected);
