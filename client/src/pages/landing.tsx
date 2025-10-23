@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -13,7 +13,8 @@ import {
   ArrowRight,
   Users,
   Clock,
-  Wallet
+  Wallet,
+  LogIn
 } from "lucide-react";
 import { SiGithub } from "react-icons/si";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -21,8 +22,9 @@ import { ConnectButton } from "@/components/ConnectButton";
 import { useWallet } from "@/providers/WalletProvider";
 
 export default function Landing() {
-  const { isConnected } = useWallet();
+  const { isConnected, address, login } = useWallet();
   const [, setLocation] = useLocation();
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
   
   // Check if user is already registered
   const { data: currentUser } = useQuery({
@@ -37,6 +39,22 @@ export default function Landing() {
       setLocation('/app');
     }
   }, [isConnected, currentUser, setLocation]);
+
+  const handleGoToDashboard = async () => {
+    if (!isConnected || !address) return;
+    
+    setIsLoggingIn(true);
+    try {
+      await login();
+      // Give it a moment for the session to be set
+      setTimeout(() => {
+        setLocation('/app');
+      }, 500);
+    } catch (error) {
+      console.error('Login failed:', error);
+      setIsLoggingIn(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -67,24 +85,43 @@ export default function Landing() {
             A messaging app where your time has value. Set your price, and only read messages you choose to accept.
           </p>
           
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-6">
-            <Link href="/register">
-              <Button size="lg" data-testid="button-register">
-                Start Getting Paid
-                <ArrowRight className="h-4 w-4 ml-2" />
+          {isConnected ? (
+            <div className="flex flex-col items-center justify-center gap-4 pt-6">
+              <Button 
+                size="lg" 
+                data-testid="button-go-to-dashboard"
+                onClick={handleGoToDashboard}
+                disabled={isLoggingIn}
+              >
+                <LogIn className="h-4 w-4 mr-2" />
+                {isLoggingIn ? 'Loading...' : 'Go to Dashboard'}
               </Button>
-            </Link>
-            <Link href="/send">
-              <Button size="lg" variant="outline" data-testid="button-send-message">
-                <Mail className="h-4 w-4 mr-2" />
-                Send a Message
-              </Button>
-            </Link>
-          </div>
+              <p className="text-sm text-muted-foreground">
+                Or <Link href="/send"><span className="text-primary hover:underline cursor-pointer">send a message</span></Link> to someone
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-6">
+                <Link href="/register">
+                  <Button size="lg" data-testid="button-register">
+                    Start Getting Paid
+                    <ArrowRight className="h-4 w-4 ml-2" />
+                  </Button>
+                </Link>
+                <Link href="/send">
+                  <Button size="lg" variant="outline" data-testid="button-send-message">
+                    <Mail className="h-4 w-4 mr-2" />
+                    Send a Message
+                  </Button>
+                </Link>
+              </div>
 
-          <p className="text-sm text-muted-foreground">
-            Register to monetize your inbox • Or reach someone directly
-          </p>
+              <p className="text-sm text-muted-foreground">
+                Register to monetize your inbox • Or reach someone directly
+              </p>
+            </>
+          )}
         </div>
       </section>
 
