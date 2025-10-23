@@ -149,7 +149,7 @@ router.post("/", async (req, res) => {
           },
           recipient: recipientWallet,
           nonce,
-          expiration: Math.floor(Date.now() / 1000) + 15 * 60, // 15 minutes in seconds
+          expiration: Math.floor(Date.now() / 1000) + expirationHrs * 60 * 60, // Match message expiration
         }],
         quote: {
           bidUsd: bidAmount,
@@ -200,7 +200,7 @@ router.post("/", async (req, res) => {
           },
           recipient: recipientWallet,
           nonce,
-          expiration: Math.floor(Date.now() / 1000) + 15 * 60, // 15 minutes in seconds
+          expiration: Math.floor(Date.now() / 1000) + expirationHrs * 60 * 60, // Match message expiration
         }],
         quote: {
           bidUsd: bidAmount,
