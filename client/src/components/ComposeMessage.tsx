@@ -66,6 +66,7 @@ export default function ComposeMessage({ isVerified, onSend, initialRecipient }:
   const [paymentRequirements, _setPaymentRequirements] = useState<any>(pendingPayment?.paymentRequirements || null);
   const [isPaying, setIsPaying] = useState(false);
   const [originalCommitPayload, setOriginalCommitPayload] = useState<any>(pendingPayment?.commitPayload || null);
+  const [storedPaymentProof, setStoredPaymentProof] = useState<any>(pendingPayment?.paymentProof || null);
   const [priceGuide, setPriceGuide] = useState<PriceGuide | null>(null);
   const [isLoadingPriceGuide, setIsLoadingPriceGuide] = useState(false);
   const [hasShownResumeToast, setHasShownResumeToast] = useState(false);
@@ -86,9 +87,91 @@ export default function ComposeMessage({ isVerified, onSend, initialRecipient }:
     }
   }, [initialRecipient]);
 
+  // Auto-complete payment if we have a stored signature
+  useEffect(() => {
+    const completeStoredPayment = async () => {
+      if (!storedPaymentProof || !originalCommitPayload) return;
+      
+      setIsPaying(true);
+      
+      try {
+        console.log('Auto-completing payment with stored signature...');
+        
+        const response = await fetch("/api/commit", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-PAYMENT": JSON.stringify(storedPaymentProof),
+          },
+          body: JSON.stringify(originalCommitPayload),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          
+          // Clear sessionStorage
+          try {
+            sessionStorage.removeItem('pendingPayment');
+          } catch (storageError) {
+            console.warn('Failed to clear sessionStorage:', storageError);
+          }
+          
+          toast({
+            title: "Bid Submitted!",
+            description: `Message pending acceptance. Expires: ${new Date(data.expiresAt).toLocaleString()}`,
+          });
+
+          // Reset form
+          setRecipient("");
+          setMessage("");
+          setBidAmount(0.10);
+          setIncludeReplyBounty(false);
+          setReplyBounty(0);
+          setExpirationHours(24);
+          setPaymentRequirements(null);
+          setPriceGuide(null);
+          setOriginalCommitPayload(null);
+          setStoredPaymentProof(null);
+
+          if (onSend) {
+            onSend(recipient, message, includeReplyBounty ? replyBounty : 0);
+          }
+          
+          // Navigate to outbox if user is authenticated (registered)
+          if (isAuthenticated) {
+            setTimeout(() => {
+              setLocation('/app?tab=outbox');
+            }, 1500);
+          }
+        } else {
+          const error = await response.json();
+          throw new Error(error.error || "Payment verification failed");
+        }
+      } catch (error) {
+        console.error("Auto-complete payment error:", error);
+        toast({
+          title: "Payment Failed",
+          description: error instanceof Error ? error.message : "Unknown error",
+          variant: "destructive",
+        });
+        // Clear the stored proof on error so user can try again
+        setStoredPaymentProof(null);
+        try {
+          sessionStorage.removeItem('pendingPayment');
+        } catch (storageError) {
+          console.warn('Failed to clear sessionStorage:', storageError);
+        }
+      } finally {
+        setIsPaying(false);
+      }
+    };
+    
+    completeStoredPayment();
+  }, []); // Run once on mount
+
   // Auto-trigger payment notification if there's a pending payment when wallet connects
   useEffect(() => {
-    if (paymentRequirements && originalCommitPayload && isConnected && !hasShownResumeToast) {
+    if (paymentRequirements && originalCommitPayload && isConnected && !hasShownResumeToast && !storedPaymentProof) {
       // Show a toast to let user know we're resuming their payment
       toast({
         title: "Resuming Payment",
@@ -97,7 +180,7 @@ export default function ComposeMessage({ isVerified, onSend, initialRecipient }:
       // Only show this toast once
       setHasShownResumeToast(true);
     }
-  }, [isConnected, paymentRequirements, originalCommitPayload]);
+  }, [isConnected, paymentRequirements, originalCommitPayload, storedPaymentProof]);
 
   // Fetch price guide when recipient changes (only if wallet connected)
   useEffect(() => {
@@ -382,6 +465,18 @@ export default function ComposeMessage({ isVerified, onSend, initialRecipient }:
         },
         txHash: null,
       };
+
+      // Save signature to sessionStorage in case page refreshes
+      try {
+        const pendingData = sessionStorage.getItem('pendingPayment');
+        if (pendingData) {
+          const parsed = JSON.parse(pendingData);
+          parsed.paymentProof = paymentProof;
+          sessionStorage.setItem('pendingPayment', JSON.stringify(parsed));
+        }
+      } catch (storageError) {
+        console.warn('Failed to save signature to sessionStorage:', storageError);
+      }
 
       // Step 3: Retry commit with payment proof
       const response = await fetch("/api/commit", {
