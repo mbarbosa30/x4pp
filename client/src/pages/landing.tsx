@@ -84,23 +84,13 @@ export default function Landing() {
       {/* Hero Section */}
       <section className="container mx-auto px-4 py-16 md:py-24">
         <div className="max-w-5xl mx-auto text-center space-y-8">
-          <Badge variant="outline" className="mb-4 text-sm">
-            Powered by Celo USDC • EIP-3009 • x402 Protocol
-          </Badge>
-          
           <h1 className="text-4xl md:text-6xl font-bold tracking-tight">
             Get paid for your attention
           </h1>
           
           <p className="text-xl md:text-2xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
-            x4pp is a peer-to-peer DM inbox where senders bid to message you in USDC on Celo. 
-            Money only moves if you open before the deadline—powered by <span className="text-foreground font-medium">EIP-3009 deferred authorization</span> and our <span className="text-foreground font-medium">Self-x402 Facilitator</span>.
+            Set your price. Senders bid in USDC. You decide which messages are worth your time.
           </p>
-
-          <div className="flex items-center justify-center gap-2 text-sm text-success">
-            <Shield className="h-4 w-4" />
-            <span className="font-medium">No escrow. No subscription. Funds stay with the sender until you open.</span>
-          </div>
           
           {isConnected ? (
             <div className="flex flex-col items-center justify-center gap-4 pt-6">
