@@ -68,10 +68,11 @@ function WalletProviderInner({ children }: { children: ReactNode }) {
   const handleConnect = async () => {
     try {
       setIsConnecting(true);
-      console.log('[WalletProvider] Opening modal...');
-      appKit.open();
+      console.log('[WalletProvider] Opening wallet modal...');
+      await appKit.open();
+      console.log('[WalletProvider] Modal opened');
     } catch (error) {
-      console.error("Failed to open wallet modal:", error);
+      console.error("[WalletProvider] Failed to open wallet modal:", error);
       throw error;
     } finally {
       setIsConnecting(false);
