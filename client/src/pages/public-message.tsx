@@ -18,11 +18,10 @@ type ProfileData = {
 };
 
 export default function PublicMessage() {
-  const [, usernameParams] = useRoute("/@:identifier");
-  const [, addressParams] = useRoute("/0x:address");
+  const [, params] = useRoute("/:identifier");
   
-  // Identifier can come from either route
-  const identifier = usernameParams?.identifier || (addressParams?.address ? `0x${addressParams.address}` : "");
+  // Get identifier from route (can be username or wallet address)
+  const identifier = params?.identifier || "";
 
   // Fetch profile data
   const { data: profile, isLoading } = useQuery<ProfileData>({
