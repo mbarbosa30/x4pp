@@ -1,7 +1,7 @@
 import express from "express";
 import { db } from "../db";
 import { users, messages, payments } from "@shared/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import { settlePayment, refundPayment } from "../celo-payment";
 
 const router = express.Router();
@@ -30,10 +30,28 @@ router.get("/pending", async (req, res) => {
       return res.status(404).json({ error: "User not found or wallet not configured" });
     }
 
-    // Get pending messages sorted by bid descending
+    // Get pending messages sorted by bid descending with sender info
     const pendingMessages = await db
-      .select()
+      .select({
+        id: messages.id,
+        senderWallet: messages.senderWallet,
+        recipientWallet: messages.recipientWallet,
+        senderName: messages.senderName,
+        senderEmail: messages.senderEmail,
+        content: messages.content,
+        bidUsd: messages.bidUsd,
+        replyBounty: messages.replyBounty,
+        status: messages.status,
+        sentAt: messages.sentAt,
+        expiresAt: messages.expiresAt,
+        openedAt: messages.openedAt,
+        repliedAt: messages.repliedAt,
+        // Sender profile info (if registered)
+        senderDisplayName: users.displayName,
+        senderUsername: users.username,
+      })
       .from(messages)
+      .leftJoin(users, sql`lower(${users.walletAddress}) = ${messages.senderWallet}`)
       .where(
         and(
           eq(messages.recipientWallet, user.walletAddress.toLowerCase()),

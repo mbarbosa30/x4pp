@@ -12,6 +12,8 @@ interface PendingMessage {
   id: number;
   senderName: string;
   senderEmail: string | null;
+  senderDisplayName: string | null;
+  senderUsername: string | null;
   content: string;
   bidUsd: string;
   replyBounty: string | null;
@@ -98,6 +100,33 @@ export default function InboxPending() {
     return senderName;
   };
 
+  const getSenderDisplayInfo = (message: PendingMessage) => {
+    // Prefer display name from registered profile
+    if (message.senderDisplayName) {
+      return {
+        name: message.senderDisplayName,
+        username: message.senderUsername,
+        isRegistered: true,
+      };
+    }
+    
+    // Fall back to username if available
+    if (message.senderUsername) {
+      return {
+        name: message.senderUsername,
+        username: null,
+        isRegistered: true,
+      };
+    }
+    
+    // Fall back to formatted wallet address
+    return {
+      name: formatSenderName(message.senderName),
+      username: null,
+      isRegistered: false,
+    };
+  };
+
   if (!isAuthenticated || !user) {
     return (
       <div className="max-w-4xl mx-auto p-6">
@@ -154,6 +183,7 @@ export default function InboxPending() {
           {messages.map((message) => {
             const isExpired = new Date(message.expiresAt) < new Date();
             const isProcessing = acceptMutation.isPending || declineMutation.isPending;
+            const senderInfo = getSenderDisplayInfo(message);
 
             return (
               <Card key={message.id} className="p-4 sm:p-6" data-testid={`card-message-${message.id}`}>
@@ -162,9 +192,14 @@ export default function InboxPending() {
                   <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
                     <div className="flex-1 min-w-0">
                       <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 mb-2">
-                        <h3 className="font-semibold text-base sm:text-lg font-mono truncate" data-testid={`text-sender-${message.id}`}>
-                          {formatSenderName(message.senderName)}
+                        <h3 className={`font-semibold text-base sm:text-lg truncate ${!senderInfo.isRegistered ? 'font-mono' : ''}`} data-testid={`text-sender-${message.id}`}>
+                          {senderInfo.name}
                         </h3>
+                        {senderInfo.username && (
+                          <span className="text-xs sm:text-sm text-muted-foreground truncate">
+                            @{senderInfo.username}
+                          </span>
+                        )}
                         {message.senderEmail && (
                           <span className="text-xs sm:text-sm text-muted-foreground truncate">
                             {message.senderEmail}
