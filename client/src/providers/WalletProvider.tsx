@@ -7,25 +7,31 @@ import { wagmiAdapter, celoChain, metadata, projectId } from "@/lib/reown-config
 import { queryClient } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 
-// Create Reown AppKit modal
-const modal = createAppKit({
-  adapters: [wagmiAdapter],
-  networks: [celoChain],
-  metadata,
-  projectId,
-  features: {
-    analytics: false,
-    email: false,
-    socials: false,
-    onramp: false,
-    swaps: false,
-  },
-  themeMode: 'dark',
-  themeVariables: {
-    '--w3m-accent': 'hsl(262 70% 62%)',
-  },
-  allowUnsupportedChain: true,
-});
+// Create Reown AppKit modal - only once
+let modal: ReturnType<typeof createAppKit> | null = null;
+const getModal = () => {
+  if (!modal) {
+    modal = createAppKit({
+      adapters: [wagmiAdapter],
+      networks: [celoChain],
+      metadata,
+      projectId,
+      features: {
+        analytics: false,
+        email: false,
+        socials: false,
+        onramp: false,
+        swaps: false,
+      },
+      themeMode: 'dark',
+      themeVariables: {
+        '--w3m-accent': 'hsl(262 70% 62%)',
+      },
+      allowUnsupportedChain: true,
+    });
+  }
+  return modal;
+};
 
 interface WalletContextType {
   address: string | undefined;
@@ -61,7 +67,7 @@ function WalletProviderInner({ children }: { children: ReactNode }) {
   const handleConnect = async () => {
     try {
       setIsConnecting(true);
-      modal.open();
+      getModal().open();
     } catch (error) {
       console.error("Failed to open wallet modal:", error);
       throw error;
