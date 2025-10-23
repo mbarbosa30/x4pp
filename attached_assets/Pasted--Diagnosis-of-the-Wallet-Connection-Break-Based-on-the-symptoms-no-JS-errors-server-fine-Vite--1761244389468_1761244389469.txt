@@ -1,0 +1,175 @@
+### Diagnosis of the Wallet Connection Break
+
+Based on the symptoms—no JS errors, server fine, Vite HMR working, but `isConnected: false` with no connection attempts in logs—your "fix" likely introduced a race condition or infinite refetch loop in TanStack Query that's interfering with Reown AppKit's (via wagmi) internal state management during the connection handshake. Reown AppKit relies on wagmi hooks like `useAccount`, `useConnect`, and `useWalletClient`, which themselves use TanStack Query under the hood for caching wallet state (e.g., chain ID, address). Aggressive invalidation + zero-cache settings can trigger rapid refetches that overlap with wagmi's async connection flow, stalling the modal or preventing the `connected` event from firing properly.
+
+This isn't a direct "break" in Reown/wagmi (no known bugs matching your exact setup from searches), but a common pitfall in wagmi + TanStack integrations: shared QueryClient conflicts during volatile states like connect/disconnect. Your server-side cache-control headers are unrelated—they only affect HTTP responses for API fetches, not Web3 RPC calls or WalletConnect v2 handshakes (which bypass your Express server).
+
+#### 1. Could the useEffect that invalidates queries on every address change be causing a race condition that breaks Reown AppKit's connection flow?
+Yes, highly likely. During connection:
+- `address` starts as `undefined`, then briefly flickers to a temp value (e.g., during WalletConnect negotiation) before stabilizing.
+- Your `useEffect` triggers `invalidateQueries` on *every* address change, which marks the query as stale and refetches `/api/users/wallet/:address`.
+- This overlaps with Reown/wagmi's internal queries (e.g., for account/chain validation), causing a refetch storm. Wagmi expects stable state during connect; rapid invalidations can queue up, delaying the `connected` callback and leaving `isConnected: false`.
+
+From wagmi docs and community reports, this creates a "stale UI race" where UI renders before connection settles, and invalidations exacerbate it.
+
+#### 2. Is staleTime: 0, gcTime: 0 on the query combined with the invalidation effect creating an infinite loop or blocking behavior?
+Partially yes—it's not a true infinite loop (TanStack prevents that), but a blocking refetch cascade:
+- `staleTime: 0` + `gcTime: 0` forces immediate refetch on mount/enable *and* no caching, so every render with `address` triggers a fetch.
+- Combined with `useEffect` invalidation (which marks stale), it refetches ~2-3x per connect attempt.
+- During connect, this floods the network tab with API calls, potentially rate-limiting your server or stalling the UI thread (React batches, but wagmi's async hooks don't).
+- Result: Connection modal appears "stuck" (no logs because refetches block the event listener setup).
+
+Community threads confirm this pattern causes "intermittent stale UI" in wagmi + TanStack setups, especially with `enabled: !!address`.
+
+#### 3. Could the aggressive cache-control headers on the server be interfering with the wallet connection handshake somehow?
+Unlikely—no. These headers (`no-store, no-cache`) only apply to your `/api/users/wallet/:address` response, preventing browser/server caching of *that endpoint*. WalletConnect v2 (Reown) uses WebSockets/JSON-RPC over wss://relay.walletconnect.com, not your Express API. It doesn't fetch user registration during handshake— that's your custom post-connect check. If anything, they help by ensuring fresh data, but they're not the culprit (test by removing them; issue persists).
+
+#### 4. Is there something about how Reown AppKit/wagmi manages wallet state that conflicts with aggressive TanStack Query invalidation?
+Yes—wagmi shares a single QueryClient instance across all hooks (default or your custom one). Your custom query (`['/api/users/wallet', address]`) lives in the same cache:
+- Wagmi's `useAccount` caches address/chain internally with default `staleTime: 0` (refetches on focus/mount).
+- Your zero-cache + invalidation amplifies this, creating contention during connect (when address changes rapidly).
+- Reown's modal (via `createAppKit`) listens for wagmi events; if refetches delay state updates, the modal dismisses prematurely without logging errors.
+
+Wagmi docs recommend *not* aggressively invalidating during connection flows—use mutations for post-connect actions instead.
+
+#### 5. What's the correct pattern for handling "check if wallet is registered" that works with wallet connect/disconnect/reconnect without breaking the connection flow?
+Your approach was fundamentally wrong in over-optimizing for staleness during a volatile phase (connect). The right pattern:
+- **Defer the check**: Run the registration query *only after* connection stabilizes (e.g., via `useEffect` on `isConnected && address`, not `enabled`).
+- **Smart Caching**: Use `staleTime: 5 * 60 * 1000` (5 min) for user data—it's semi-static. Invalidate *only* after mutations (e.g., register/login success) using `queryClient.invalidateQueries({ queryKey: ['userByWallet'] })`.
+- **Query Key Strategy**: Use a stable key like `['userByWallet', address?.toLowerCase()]`—TanStack auto-invalidates on key changes without `useEffect`.
+- **Reconnect Handling**: Rely on wagmi's built-in reconnect (via `useReconnect` or AppKit's auto-retry). Clear session on disconnect.
+- **Optimistic UI**: Show loading during connect; redirect post-check.
+
+This avoids races: Connection completes first, *then* fetch user.
+
+### Recommended Fix: Code Updates
+Revert your "fix" partially, then apply this. Test in incognito to clear any lingering cache.
+
+#### 1. Update `client/src/pages/landing.tsx` (Remove Aggressive Settings)
+```typescript
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useAccount, useConnect } from 'wagmi';  // Assuming wagmi hooks
+
+const LandingPage = () => {
+  const queryClient = useQueryClient();
+  const { address, isConnected } = useAccount();
+  const { connect, isPending: isConnecting } = useConnect();
+
+  // Stable query key with address (auto-invalidates on change)
+  const { data: userByWallet, isLoading: isCheckingWallet } = useQuery({
+    queryKey: ['userByWallet', address?.toLowerCase()],  // Stable, no manual effect needed
+    queryFn: async () => {
+      if (!address) return null;
+      const res = await fetch(`/api/users/wallet/${address}`);
+      if (!res.ok) throw new Error('Not registered');
+      return await res.json();
+    },
+    enabled: !!address && isConnected,  // Only after connect stabilizes
+    staleTime: 5 * 60 * 1000,  // 5 min cache—user data doesn't change often
+    gcTime: 10 * 60 * 1000,    // Keep in memory 10 min
+    retry: false,
+  });
+
+  // Post-mutation invalidation only (e.g., after register/login)
+  const handleRegisterSuccess = () => {
+    queryClient.invalidateQueries({ queryKey: ['userByWallet'] });  // Broad invalidation post-action
+    // Redirect to /app
+  };
+
+  // No useEffect for invalidation—let key changes handle it
+
+  if (isCheckingWallet) return <div>Checking wallet...</div>;
+
+  if (isConnected && !userByWallet) return <Navigate to="/register" />;
+
+  if (isConnected && userByWallet) return <Navigate to="/app" />;
+
+  return (
+    <ConnectButton onConnect={connect} isConnecting={isConnecting} />
+  );
+};
+```
+
+#### 2. Update `server/api/users.ts` (Keep Headers, But Optional)
+Your headers are fine (helps freshness), but test without:
+```typescript
+app.get('/api/users/wallet/:address', async (req, res) => {
+  const { address } = req.params;
+  // ... your logic
+
+  res.set('Cache-Control', 'public, max-age=300');  // 5 min cache—balance freshness/performance
+  // Or remove entirely if testing
+
+  res.json(user || null);
+});
+```
+
+#### 3. Enhance `client/src/providers/WalletProvider.tsx` (Handle Reconnect)
+Ensure your provider resets on disconnect:
+```typescript
+import { QueryClient } from '@tanstack/react-query';
+import { WagmiProvider, createConfig } from 'wagmi';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { AppKit } from '@reown/appkit';  // Reown setup
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5,  // Global 5 min default
+    },
+  },
+});
+
+const config = createConfig({ /* chains: [celo], connectors */ });
+
+export const WalletProvider = ({ children }) => {
+  const [appKit] = useState(() =>
+    AppKit.init({
+      // ... your config
+      metadata: { /* app details */ },
+    })
+  );
+
+  // Reset query cache on full disconnect (optional, for aggressive reset)
+  const { isConnected } = useAccount();
+  useEffect(() => {
+    if (!isConnected) {
+      queryClient.clear();  // Clears all on disconnect—prevents stale across sessions
+    }
+  }, [isConnected]);
+
+  return (
+    <WagmiProvider config={config}>
+      <QueryClientProvider client={queryClient}>
+        {children}
+      </QueryClientProvider>
+    </WagmiProvider>
+  );
+};
+```
+
+#### 4. Update `client/src/components/ConnectButton.tsx` (Add Logging)
+For debugging:
+```typescript
+const ConnectButton = ({ onConnect, isConnecting }) => {
+  const handleConnect = async () => {
+    console.log('[ConnectButton] Initiating connect...');
+    try {
+      await onConnect();  // Or appKit.open() for modal
+      console.log('[ConnectButton] Connect success');
+    } catch (err) {
+      console.error('[ConnectButton] Connect failed:', err);
+    }
+  };
+
+  return <button onClick={handleConnect} disabled={isConnecting}>Connect</button>;
+};
+```
+
+### Testing Steps
+1. Revert to pre-fix code, confirm connect works.
+2. Apply above—test connect/disconnect/reconnect.
+3. Monitor Network tab: Expect one `/api/users/wallet` fetch post-connect.
+4. If still broken: Check if QueryClient is shared (console.log(queryClient.getQueryCache().queries.length) during connect).
+
+This fixes the race by decoupling invalidation from connection volatility. Your original stale issue was real (address changes don't auto-invalidate if key is static), but solved via dynamic keys + post-mutation invalidation. If persists, share WalletProvider full code for deeper debug.

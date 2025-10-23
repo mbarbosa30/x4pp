@@ -1,0 +1,186 @@
+Got it—thanks for the full context. Here’s what’s (very likely) happening, how to prove it in 5–10 minutes, and the clean pattern to fix it without breaking Reown AppKit / wagmi.
+
+---
+
+# What’s actually breaking
+
+### 1) Recreating the wallet plumbing on every re-render
+
+When TanStack Query invalidates, your landing page re-renders. If your `WalletProvider` (or anything inside it) **recreates** the wagmi config/AppKit client/connectors on every render (instead of once), WalletConnect sessions get torn down, and `isConnected` will stay `false` with no visible errors.
+
+Typical foot-guns:
+
+* Creating `new QueryClient()`, `createConfig(...)`, `new AppKit(...)`, or `new WalletConnectConnector(...)` **inside** a React component body without `useMemo([])`/top-level module scope.
+* Conditionally mounting `<WagmiProvider>` or `<AppKitProvider>` based on page state.
+* Changing `key` prop on any of those providers.
+
+Result: your “fix” (invalidate + `gcTime: 0`) increased re-renders → the wallet layer keeps getting re-instantiated mid-handshake → **no connection**.
+
+### 2) The query invalidation loop you added is too aggressive
+
+* `staleTime: 0` + `gcTime: 0` + `invalidateQueries` on every `address` change means: refetch → re-render → configs re-init (if not memoized) → wallet disconnects → `address` toggles → invalidate again. Even if you guarded with `if (address)`, that still flaps when the provider switches accounts or during handshake.
+
+### 3) Cache-control headers aren’t the culprit
+
+`Cache-Control: no-store` on **your API** won’t affect WalletConnect v2 (its relayer/websocket runs elsewhere). Good to keep, just not the reason for the broken connect.
+
+---
+
+# Prove the diagnosis (quick checks)
+
+1. **Add a one-time init log** in `WalletProvider.tsx`:
+
+   ```ts
+   console.log('WALLET INIT'); // right after creating wagmi config/appkit instance
+   ```
+
+   If you see this log multiple times when clicking around or when the query refetches, you’re re-creating the wallet stack. That’s the bug.
+
+2. **Check provider stability**:
+
+   * Ensure you’re not doing `const queryClient = new QueryClient()` inside a component that re-renders. It belongs at module scope *or* in a `useState(() => new QueryClient())`.
+
+3. **Temporarily comment out** the invalidation `useEffect` in `landing.tsx`.
+
+   * If connect works again, your invalidation is the trigger.
+
+---
+
+# The correct pattern (solid + simple)
+
+## A) Make the wallet/AppKit/wagmi singletons stable
+
+**Do this once** in module scope or with memoized state:
+
+```tsx
+// client/src/providers/WalletProvider.tsx
+import { WagmiProvider, createConfig } from 'wagmi';
+import { celo, celoAlfajores } from 'viem/chains';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { createAppKit } from '@reown/appkit'; // or whatever builder you use
+
+// 1) QueryClient: stable
+const queryClient = new QueryClient({
+  defaultOptions: { queries: { staleTime: 30_000, refetchOnWindowFocus: false } }
+});
+
+// 2) wagmi config: stable
+const wagmiConfig = createConfig({
+  chains: [celo, celoAlfajores],
+  // connectors: [...]  // define once
+  // transports: { [celo.id]: http('https://forno.celo.org') }
+});
+
+// 3) AppKit instance: stable
+const appKit = createAppKit({
+  projectId: '<wc_project_id>',
+  wagmiConfig,
+  // app metadata...
+});
+
+export function WalletProvider({ children }: { children: React.ReactNode }) {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <WagmiProvider config={wagmiConfig}>
+        {/* If AppKit needs a provider wrapper, render it here */}
+        {children}
+      </WagmiProvider>
+    </QueryClientProvider>
+  );
+}
+```
+
+**Do NOT** create those objects inside the function body without memoization, and **do NOT** re-key the providers.
+
+## B) Don’t “invalidate on address change”; use **address in the key**
+
+Instead of manually invalidating, just bake the address into the query key and let TanStack Query manage it. Give it a modest `staleTime` and opt into refetch when the address changes (which it will, because the key changes).
+
+```tsx
+// client/src/pages/landing.tsx
+const { address, isConnected } = useAccount();
+
+const { data: userByWallet, isFetching } = useQuery({
+  queryKey: ['userByWallet', address], // address segregates cache
+  queryFn: () => fetch(`/api/users/wallet/${address}`).then(r => r.json()),
+  enabled: Boolean(isConnected && address),
+  staleTime: 10_000,           // short, not zero
+  gcTime: 5 * 60 * 1000,       // keep some cache; don’t nuke immediately
+  refetchOnMount: 'always',    // when this component remounts
+  refetchOnReconnect: 'always' // when WalletConnect reconnects
+});
+```
+
+**Remove** the `useEffect(... invalidateQueries ...)`. You don’t need it.
+
+If you want explicit refresh on wallet **disconnect**, listen to wagmi and **remove** the previous entry:
+
+```tsx
+const prevAddressRef = useRef<string | undefined>();
+
+useEffect(() => {
+  if (!isConnected && prevAddressRef.current) {
+    queryClient.removeQueries({ queryKey: ['userByWallet', prevAddressRef.current] });
+  }
+  prevAddressRef.current = address;
+}, [isConnected, address, queryClient]);
+```
+
+That’s a one-time cleanup when a user disconnects.
+
+## C) Don’t set `gcTime: 0` or `staleTime: 0` for this query
+
+* `staleTime: 0` forces immediate refetches; paired with wallet state changes it creates turbulent re-renders.
+* `gcTime: 0` means the cache is destroyed as soon as the query is unused; you lose the natural dedup/short-term memory that prevents waterfalls.
+
+The settings above (10s `staleTime`) give you fresh-enough data without churn.
+
+## D) Route logic: derive redirects **after** query settles
+
+On landing:
+
+```tsx
+if (isConnected && address && !isFetching) {
+  if (!userByWallet?.exists) navigate('/register');
+  else navigate('/app');
+}
+```
+
+Don’t navigate based on a **loading** state or while the wallet is mid-handshake.
+
+---
+
+# Answers to your specific questions
+
+1. **Could the invalidation effect cause a race?**
+   Yes. If it triggers re-renders that recreate the wagmi/AppKit config (because they’re not memoized), it will kill the connect flow repeatedly.
+
+2. **Is `staleTime: 0` + `gcTime: 0` causing a loop/block?**
+   It amplifies re-render churn. With your invalidation effect, it’s very easy to cause constant refetch → re-render → re-init of wallet stack.
+
+3. **Do Cache-Control headers affect the wallet connect?**
+   No. WalletConnect v2 uses its own relayer/websocket. Your API headers don’t block connect.
+
+4. **Is there a wagmi/AppKit conflict with aggressive invalidation?**
+   Not inherently, but aggressive invalidation that causes providers/configs to re-mount **will** break the session.
+
+5. **Correct pattern for “is wallet registered?”**
+
+* Keep providers stable (singleton/memoized).
+* Use `['userByWallet', address]` as the query key.
+* `enabled: isConnected && !!address`.
+* Modest `staleTime` (5–30s) + `refetchOnReconnect: 'always'`.
+* Optional cleanup: `removeQueries` for the **previous** address on disconnect.
+* No manual invalidation loop.
+
+---
+
+# Quick recovery checklist
+
+* [ ] Move creation of `QueryClient`, `wagmiConfig`, and AppKit instance **out of render** and **don’t** key/conditional-render the providers.
+* [ ] Replace your `useQuery` with the pattern above; **remove** the invalidation effect.
+* [ ] Keep your server `Cache-Control: no-store` (fine).
+* [ ] Add a dev-only “Wallet init” log—confirm it prints **once** per page load.
+* [ ] Test: connect → disconnect → connect with a **different** wallet. Confirm the query key switches and the UI routes correctly.
+
+If you want, paste your `WalletProvider.tsx` and `landing.tsx` and I’ll annotate exactly where to add `useMemo`/module-scope singletons and what to delete.

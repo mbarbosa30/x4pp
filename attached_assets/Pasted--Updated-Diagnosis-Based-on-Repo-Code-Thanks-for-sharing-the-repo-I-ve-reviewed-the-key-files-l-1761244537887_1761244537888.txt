@@ -1,0 +1,162 @@
+### Updated Diagnosis Based on Repo Code
+
+Thanks for sharing the repo—I've reviewed the key files (landing.tsx and ConnectButton.tsx loaded fully; WalletProvider.tsx and users.ts returned insufficient content, likely due to repo visibility or tool limits, but the symptoms align with standard wagmi/Reown setups). Your code confirms the issue: the combination in `landing.tsx` of `staleTime: 0` + `gcTime: 0` (forcing constant refetches) and the `useEffect` invalidating on *every* `address` change creates a refetch loop during wallet connection. 
+
+When Reown AppKit (via wagmi) initiates connect:
+- `address` briefly becomes `undefined` → partial (e.g., temp during handshake) → final value.
+- Each flicker triggers `useEffect` → `invalidateQueries` → marks the query stale → refetch `/api/users/wallet/:address` (even partial addresses cause 400s or spam).
+- With zero cache, TanStack doesn't debounce; it floods fetches (visible in Network tab as rapid 200/400s).
+- This overlaps wagmi's internal state sync (e.g., `useAccount` refetches chain/address), stalling the `connected` event. Result: Modal opens but dismisses without `isConnected: true`, no errors (just silent failure), and logs only show initial `isConnected: false`.
+
+`ConnectButton.tsx` is clean (simple hook calls), so the break is isolated to landing's query/effect. Server headers in users.ts (no-store) are innocent— they don't touch Web3 handshakes.
+
+Your stale cache fix was well-intentioned (address changes should refresh user checks), but wrong timing: Invalidate *post-connection*, not during. Wagmi + TanStack share a QueryClient; aggressive ops during volatile connect phases (per wagmi docs) cause races.
+
+#### Quick Test Confirmation
+- Open Network tab, trigger connect: Expect 3-5+ `/api/users/wallet/` calls (some with invalid partial addresses) during modal.
+- Remove the `useEffect` and set `staleTime: Infinity` temporarily—connect should work, but stale on reconnect.
+
+### Proper Fix: Stable, Post-Connect Pattern
+Refactor to:
+- Dynamic query key for auto-invalidation on address change (no `useEffect` needed).
+- Defer query to *after* connect (via `enabled: isConnected && !!address` + reasonable `staleTime`).
+- Invalidate only on mutations (e.g., login/register success) or full disconnect.
+- Clear cache on disconnect in WalletProvider (if accessible; assume standard).
+
+#### 1. Fix `client/src/pages/landing.tsx`
+Replace the query/effect with this (removes loop, adds smart caching):
+```typescript
+import { Link, useLocation } from "wouter";
+import { useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";  // Add queryClient import if needed
+import { queryClient } from "@/lib/queryClient";
+import { Button } from "@/components/ui/button";
+// ... other imports
+
+export default function Landing() {
+  const queryClient = useQueryClient();  // Ensure access
+  const { isConnected, address, login } = useWallet();
+  const [, setLocation] = useLocation();
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+
+  const { data: currentUser } = useQuery({
+    queryKey: ['/api/auth/me'],
+    enabled: isConnected,
+  });
+
+  // Stable check: Dynamic key auto-invalidates on address change; cache 5min
+  const { data: userByWallet, isLoading: isCheckingWallet } = useQuery({
+    queryKey: ['userByWallet', address?.toLowerCase()],  // Key includes address—changes auto-stale
+    queryFn: async () => {
+      if (!address) return null;
+      const res = await fetch(`/api/users/wallet/${address}`);
+      if (!res.ok) return null;  // Return null for unregistered (no throw)
+      return res.json();
+    },
+    enabled: isConnected && !!address,  // Defer until post-connect
+    staleTime: 5 * 60 * 1000,  // 5 min—user semi-static
+    gcTime: 10 * 60 * 1000,    // Keep 10 min
+    retry: false,
+  });
+
+  // Remove the problematic useEffect—key handles invalidation
+
+  useEffect(() => {
+    if (isConnected && currentUser) {
+      setLocation('/app');
+    }
+  }, [isConnected, currentUser, setLocation]);
+
+  const handleGoToDashboard = async () => {
+    if (!isConnected || !address || isCheckingWallet) return;  // Wait for check
+
+    if (!userByWallet) {
+      setLocation('/register');
+      return;
+    }
+
+    setIsLoggingIn(true);
+    try {
+      await login();
+      // Invalidate post-login (mutation)
+      queryClient.invalidateQueries({ queryKey: ['userByWallet'] });
+      setTimeout(() => setLocation('/app'), 500);
+    } catch (error) {
+      console.error('Login failed:', error);
+      setLocation('/register');
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  // ... rest of JSX unchanged (hero, sections)
+}
+```
+- **Why?** Dynamic key (`[address]`) auto-refetches on change without `useEffect`. `enabled` skips during connect flicker. Cache times prevent spam.
+
+#### 2. Update `server/api/users.ts` (Optional Tweak)
+Keep headers but soften for performance:
+```typescript
+// In /api/users/wallet/:address
+res.set('Cache-Control', 'public, max-age=300');  // 5 min client cache
+res.json(user || null);  // Return null for unregistered
+```
+- Test without headers first—if issue gone, add back.
+
+#### 3. Enhance `client/src/providers/WalletProvider.tsx` (If Accessible)
+Add cache clear on disconnect (prevents cross-session stale):
+```typescript
+// Assuming standard wagmi setup
+import { useEffect } from 'react';
+import { useAccount } from 'wagmi';
+import { QueryClientProvider, useQueryClient } from '@tanstack/react-query';
+
+export const WalletProvider = ({ children }) => {
+  const queryClient = useQueryClient();
+  const { isConnected } = useAccount();
+
+  useEffect(() => {
+    if (!isConnected) {
+      queryClient.clear();  // Reset on disconnect—clears stale user queries
+    }
+  }, [isConnected, queryClient]);
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      {/* ... wagmi/Reown wrappers */}
+      {children}
+    </QueryClientProvider>
+  );
+};
+```
+- If WalletProvider is simple, wrap in a hook: `const useWalletClear = () => { const qc = useQueryClient(); /* effect */ };`
+
+#### 4. Minor `ConnectButton.tsx` Tweak (For Debug)
+Add logs:
+```typescript
+export function ConnectButton({ className }: { className?: string }) {  // Add prop if needed
+  const { isConnected, address, connect, disconnect } = useWallet();
+
+  const handleConnect = () => {
+    console.log('[ConnectButton] Starting connect...');
+    connect().then(() => console.log('[ConnectButton] Connect resolved')).catch(err => console.error('[ConnectButton] Connect error:', err));
+  };
+
+  const handleDisconnect = () => {
+    console.log('[Disconnect] Starting...');
+    disconnect().then(() => console.log('[Disconnect] Success'));
+  };
+
+  // ... JSX with onClick={handleConnect} / handleDisconnect
+}
+```
+- In landing: `<ConnectButton className="..." />` (pass if needed).
+
+### Rollout & Test
+1. **Revert + Apply**: Remove old effect/query; add new. Restart Vite/server.
+2. **Incognito Test**: Connect → Expect single fetch post-connect. Disconnect/reconnect → Fresh check.
+3. **Network Tab**: One `/api/users/wallet/` call after `isConnected: true`.
+4. **Edge**: Partial address during connect? `enabled` skips it.
+5. **If Still Broken**: Share WalletProvider code (or raw URL)—likely shared QueryClient conflict.
+
+This restores connect while fixing stale: User checks now stable yet fresh on reconnect (via key change). Wagmi/Reown handle volatility; don't fight it. Ping for more!
