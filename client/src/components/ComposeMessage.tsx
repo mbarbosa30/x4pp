@@ -802,19 +802,35 @@ export default function ComposeMessage({ isVerified, onSend, initialRecipient }:
         <div className="border-t pt-6">
           {paymentRequirements ? (
             <div className="space-y-4">
+              <div className="p-3 bg-gradient-to-br from-success/10 to-success/5 border border-success/20 rounded-md flex gap-3">
+                <Shield className="h-5 w-5 text-success flex-shrink-0 mt-0.5" />
+                <div className="text-xs text-foreground">
+                  <div className="font-semibold mb-1">Funds stay in your wallet</div>
+                  <div className="text-muted-foreground">
+                    You're signing an EIP-3009 authorization—no USDC leaves your wallet until the receiver accepts. If they ignore it, the authorization expires automatically.
+                  </div>
+                </div>
+              </div>
+              
               <div className="p-4 bg-muted rounded-md">
-                <div className="text-sm font-medium mb-2">Payment Required</div>
-                <div className="flex justify-between items-center mb-3">
-                  <span className="text-xs text-muted-foreground">Bid Amount</span>
-                  <span className="font-mono font-semibold">{bidAmount.toFixed(2)} USDC</span>
-                </div>
-                <div className="flex justify-between items-center mb-3">
-                  <span className="text-xs text-muted-foreground">Network</span>
-                  <span className="text-xs">Celo Mainnet</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-xs text-muted-foreground">Recipient</span>
-                  <span className="text-xs font-mono">{paymentRequirements.recipient.slice(0, 10)}...</span>
+                <div className="text-sm font-medium mb-3">Authorization Details</div>
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-muted-foreground">Bid Amount</span>
+                    <span className="font-mono font-semibold">{bidAmount.toFixed(2)} USDC</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-muted-foreground">Network</span>
+                    <span className="text-xs">Celo Mainnet</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-muted-foreground">Recipient</span>
+                    <span className="text-xs font-mono">{paymentRequirements.recipient.slice(0, 10)}...</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-muted-foreground">Method</span>
+                    <Badge variant="outline" className="text-xs">EIP-3009</Badge>
+                  </div>
                 </div>
               </div>
               
