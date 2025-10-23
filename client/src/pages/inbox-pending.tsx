@@ -6,7 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { CheckCircle, XCircle, Clock, DollarSign, Mail } from "lucide-react";
+import { CheckCircle, XCircle, Clock, DollarSign, Mail, Shield } from "lucide-react";
 
 interface PendingMessage {
   id: number;
@@ -238,8 +238,32 @@ export default function InboxPending() {
                     </div>
                   </div>
 
-                  {/* Message content - hidden until acceptance */}
+                  {/* Authorization Details */}
                   <div className="border-t pt-4">
+                    <div className="bg-gradient-to-br from-primary/5 to-primary/10 border border-primary/20 rounded-md p-3 mb-3">
+                      <div className="flex gap-2 items-start mb-2">
+                        <Shield className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />
+                        <div className="flex-1">
+                          <div className="text-xs font-semibold text-foreground mb-1">
+                            EIP-3009 Deferred Authorization
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            Sender signed a payment authorization. Their USDC stays in their wallet—it only moves when you accept.
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 pt-2 border-t border-primary/10">
+                        <Clock className="h-3.5 w-3.5 text-primary" />
+                        <span className="text-xs text-muted-foreground">
+                          <span className={isExpired ? "text-destructive font-medium" : "text-foreground font-medium"}>
+                            {formatTimeRemaining(message.expiresAt)}
+                          </span>
+                          {!isExpired && " to accept"}
+                          {isExpired && " — authorization expired"}
+                        </span>
+                      </div>
+                    </div>
+
                     <div className="p-4 bg-muted/30 rounded-md border border-dashed">
                       <p className="text-sm text-muted-foreground italic text-center" data-testid={`text-content-${message.id}`}>
                         Message content will be visible after you accept this bid
