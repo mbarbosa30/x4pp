@@ -1,0 +1,87 @@
+got it — here’s a crisp, ready-to-paste landing-page copy set that refines your message and keeps it simple, while nodding to the tech.
+
+Hero (pick 1)
+
+A. Get paid for your attention.
+B. Your inbox, but with a price.
+C. Pay-to-message, powered by your time.
+
+Subhead:
+x4pp is a peer-to-peer messaging attention market. Anyone can send you a DM by placing a bid in USDC on Celo. Funds only move if you open before the deadline (EIP-3009 deferred authorization).
+
+Primary CTA: Open your inbox
+Secondary CTA: Try a demo
+
+⸻
+
+One-liner (elevator pitch)
+
+x4pp lets anyone monetize their demand, time, and attention with a simple URL—perfect for creators, influencers, founders, and beyond.
+
+⸻
+
+Value props (short & clear)
+	•	Simple URL: Share x4pp.xyz/@you to receive paid DMs from anyone.
+	•	No escrow drama: Money stays with the sender until you open.
+	•	Open bidding: Senders pick their price; you decide what’s worth opening.
+	•	Any wallet, no signup: Message any Celo address—even if they haven’t claimed an inbox yet.
+
+⸻
+
+How it works (3 steps each)
+
+For receivers
+	1.	Claim your inbox with your wallet.
+	2.	Set a minimum price.
+	3.	Open bids you like → instant USDC to your wallet; ignore the rest and they expire.
+
+For senders
+	1.	Pick a username or wallet address.
+	2.	See a price guide (min / typical / high) and place your bid.
+	3.	Sign a gasless authorization; if the recipient opens in time, USDC transfers—otherwise nothing moves.
+
+⸻
+
+Who it’s for (examples)
+	•	Celebrities & influencers: Filter noise, keep only what’s valuable.
+	•	CEOs & operators: Prioritize real opportunities over cold spam.
+	•	Creators & consultants: Turn inbound requests into paid time.
+	•	Communities & DAOs: Gate attention fairly without KYC.
+
+⸻
+
+Tech note (one sentence, friendly)
+
+Runs on Celo + USDC with EIP-3009 “sign-to-authorize” payments and a facilitator that settles only when you open. No funds move until you say so.
+
+⸻
+
+Roadmap teaser (AI agents)
+
+Soon: a marketplace for AI agents—let agents bid to deliver services (summaries, research, intros) directly into your paid inbox.
+
+⸻
+
+Microcopy you can sprinkle in
+	•	“No funds move unless you open.”
+	•	“Gasless for senders. Receiver (or relayer) pays gas on accept.”
+	•	“One active bid per sender → spam collapses.”
+	•	“Unopened bids auto-expire—no refund step needed.”
+
+⸻
+
+SEO / social (drop-in)
+
+Title: x4pp — Get paid for your attention
+Meta description: A peer-to-peer messaging attention market on Celo. Senders bid in USDC; funds only move if the receiver opens. Open bidding, simple URL, no escrow.
+OG/Twitter description: Pay-to-message that respects your time. USDC on Celo, EIP-3009 deferred authorizations, open bidding.
+
+⸻
+
+Short press/tweet blurbs (choose one)
+	•	“x4pp: get paid to read DMs. Open bidding in USDC on Celo; funds only move if you open.”
+	•	“Your attention is scarce. Price it. x4pp lets anyone DM you by bidding—no escrow, no spam.”
+
+⸻
+
+If you want, tell me your preferred hero option (A/B/C) and I’ll tailor the rest of the page sections to match that tone exactly.
