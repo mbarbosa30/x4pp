@@ -32,20 +32,20 @@ export default function Landing() {
   });
 
   // Check if connected wallet is registered
+  // Dynamic key auto-invalidates on address change - no manual effect needed
   const { data: userByWallet, isLoading: isCheckingWallet } = useQuery({
-    queryKey: ['/api/users/wallet', address],
+    queryKey: ['userByWallet', address?.toLowerCase()],
+    queryFn: async () => {
+      if (!address) return null;
+      const res = await fetch(`/api/users/wallet/${address}`);
+      if (!res.ok) return null;
+      return res.json();
+    },
     enabled: isConnected && !!address,
     retry: false,
-    staleTime: 0, // Always refetch
-    gcTime: 0, // Don't cache
+    staleTime: 5 * 60 * 1000, // 5 min cache - user data is semi-static
+    gcTime: 10 * 60 * 1000, // Keep in memory 10 min
   });
-
-  // Invalidate wallet check when address changes
-  useEffect(() => {
-    if (address) {
-      queryClient.invalidateQueries({ queryKey: ['/api/users/wallet', address] });
-    }
-  }, [address]);
 
   useEffect(() => {
     if (isConnected && currentUser) {
@@ -54,14 +54,10 @@ export default function Landing() {
   }, [isConnected, currentUser, setLocation]);
 
   const handleGoToDashboard = async () => {
-    if (!isConnected || !address) return;
-    
-    // Wait for wallet check to complete
-    if (isCheckingWallet) return;
+    if (!isConnected || !address || isCheckingWallet) return;
     
     // Check if wallet is registered
     if (!userByWallet) {
-      // Not registered - redirect to registration
       setLocation('/register');
       return;
     }
@@ -69,13 +65,15 @@ export default function Landing() {
     setIsLoggingIn(true);
     try {
       await login();
+      // Invalidate after successful login (mutation)
+      queryClient.invalidateQueries({ queryKey: ['userByWallet'] });
       setTimeout(() => {
         setLocation('/app');
       }, 500);
     } catch (error) {
       console.error('Login failed:', error);
-      // If login fails, redirect to register
       setLocation('/register');
+    } finally {
       setIsLoggingIn(false);
     }
   };

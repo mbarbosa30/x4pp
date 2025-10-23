@@ -59,11 +59,11 @@ function WalletProviderInner({ children }: { children: ReactNode }) {
       timestamp: new Date().toISOString()
     });
     
-    // When wallet disconnects, clear session
+    // When wallet disconnects, clear all cached queries
     if (!isConnected && !isDisconnecting) {
-      queryClient.setQueryData(['/api/auth/me'], null);
+      queryClient.clear();
     }
-  }, [isConnected, address, isDisconnecting]);
+  }, [isConnected, isDisconnecting]);
 
   const handleConnect = async () => {
     try {
