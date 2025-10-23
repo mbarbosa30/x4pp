@@ -1,6 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -35,7 +36,16 @@ export default function Landing() {
     queryKey: ['/api/users/wallet', address],
     enabled: isConnected && !!address,
     retry: false,
+    staleTime: 0, // Always refetch
+    gcTime: 0, // Don't cache
   });
+
+  // Invalidate wallet check when address changes
+  useEffect(() => {
+    if (address) {
+      queryClient.invalidateQueries({ queryKey: ['/api/users/wallet', address] });
+    }
+  }, [address]);
 
   useEffect(() => {
     if (isConnected && currentUser) {

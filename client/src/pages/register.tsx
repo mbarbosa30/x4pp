@@ -47,6 +47,18 @@ export default function Register() {
   const { toast } = useToast();
   const { address: walletAddress, isConnected, connect, disconnect } = useWallet();
   
+  // Check if already authenticated
+  const { data: currentUser } = useQuery({
+    queryKey: ['/api/auth/me'],
+  });
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (currentUser) {
+      setLocation('/app');
+    }
+  }, [currentUser, setLocation]);
+  
   const { data: tokens = [], isLoading: tokensLoading } = useQuery<Token[]>({
     queryKey: ['/api/tokens'],
   });

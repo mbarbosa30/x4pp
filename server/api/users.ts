@@ -28,6 +28,11 @@ router.get("/wallet/:address", async (req, res) => {
       .where(eq(users.walletAddress, normalizedAddress))
       .limit(1);
 
+    // Prevent browser caching - always fetch fresh data
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+
     if (!user) {
       return res.status(404).json({ error: "Wallet not registered" });
     }
