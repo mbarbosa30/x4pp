@@ -12,9 +12,15 @@ if (!projectId) {
 export const metadata = {
   name: 'x4pp',
   description: 'P2P Attention Market - Get paid to read messages',
-  url: typeof window !== 'undefined' ? window.location.origin : 'https://x4pp.app',
-  icons: ['https://x4pp.app/favicon.ico'],
+  url: typeof window !== 'undefined' ? window.location.origin : '',
+  icons: ['https://avatars.githubusercontent.com/u/179229932'],
 };
+
+// Debug: Log the metadata URL
+if (typeof window !== 'undefined') {
+  console.log('[Reown Config] Metadata URL:', metadata.url);
+  console.log('[Reown Config] Window origin:', window.location.origin);
+}
 
 const networks: [AppKitNetwork, ...AppKitNetwork[]] = [celo];
 
