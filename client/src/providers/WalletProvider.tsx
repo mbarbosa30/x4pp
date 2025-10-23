@@ -46,17 +46,20 @@ function WalletProviderInner({ children }: { children: ReactNode }) {
   const { address, isConnected } = useAppKitAccount();
   const { open } = useAppKit();
   const [isConnecting, setIsConnecting] = useState(false);
+  const [isDisconnecting, setIsDisconnecting] = useState(false);
   const [, setLocation] = useLocation();
 
-  // Auto-login when wallet connects
+  // Auto-login when wallet connects (but not after manual disconnect)
   useEffect(() => {
     console.log('[WalletProvider] State changed:', { 
       isConnected, 
       address,
+      isDisconnecting,
       timestamp: new Date().toISOString()
     });
     
-    if (isConnected && address) {
+    // Don't auto-login if user is in the middle of disconnecting
+    if (isConnected && address && !isDisconnecting) {
       console.log('[WalletProvider] Attempting auto-login...');
       fetch('/api/auth/login', {
         method: 'POST',
@@ -74,7 +77,13 @@ function WalletProviderInner({ children }: { children: ReactNode }) {
         console.error('[WalletProvider] Auto-login error:', err);
       });
     }
-  }, [isConnected, address]);
+    
+    // Reset disconnecting flag when wallet is fully disconnected
+    if (!isConnected && isDisconnecting) {
+      console.log('[WalletProvider] Wallet fully disconnected, resetting flag');
+      setIsDisconnecting(false);
+    }
+  }, [isConnected, address, isDisconnecting]);
 
   const handleConnect = async () => {
     try {
@@ -91,12 +100,20 @@ function WalletProviderInner({ children }: { children: ReactNode }) {
 
   const handleDisconnect = async () => {
     try {
-      await disconnect(wagmiAdapter.wagmiConfig);
+      console.log('[WalletProvider] Starting disconnect...');
+      setIsDisconnecting(true);
+      
+      // Clear backend session first
       await fetch('/api/auth/logout', { method: 'POST' });
       queryClient.setQueryData(['/api/auth/me'], null);
       queryClient.clear();
+      
+      // Then disconnect wallet
+      await disconnect(wagmiAdapter.wagmiConfig);
+      console.log('[WalletProvider] Disconnect complete');
     } catch (error) {
       console.error("Failed to disconnect:", error);
+      setIsDisconnecting(false);
       throw error;
     }
   };
