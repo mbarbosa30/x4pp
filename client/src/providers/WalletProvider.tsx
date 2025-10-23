@@ -51,6 +51,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           } catch (logoutError) {
             console.error('Failed to logout:', logoutError);
           }
+          // Clear the intentional disconnect flag since disconnect is complete
+          isIntentionalDisconnect.current = false;
           return;
         }
 
@@ -59,6 +61,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           // Skip auto-login if this is right after an intentional disconnect
           if (isIntentionalDisconnect.current) {
             console.log('Skipping auto-login after intentional disconnect');
+            // Clear the flag now that we've skipped once
+            isIntentionalDisconnect.current = false;
             return;
           }
           
@@ -151,10 +155,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         // Navigate to home without reload
         setLocation('/');
         
-        // Clear the flag after navigation to allow future connections
-        setTimeout(() => {
-          isIntentionalDisconnect.current = false;
-        }, 1000);
+        // Note: Flag will be cleared automatically when disconnect is detected in watchAccount
       } catch (logoutError) {
         console.error('Failed to logout:', logoutError);
         // Clear flag even on error
