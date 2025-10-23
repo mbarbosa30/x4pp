@@ -160,7 +160,7 @@ function WalletProviderInner({ children }: { children: ReactNode }) {
     try {
       setIsConnecting(true);
       // Open Reown AppKit modal for wallet connection
-      await modal.open();
+      modal.open();
     } catch (error) {
       console.error("Failed to open wallet modal:", error);
       throw error;
