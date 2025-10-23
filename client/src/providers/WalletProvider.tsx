@@ -59,11 +59,13 @@ function WalletProviderInner({ children }: { children: ReactNode }) {
       timestamp: new Date().toISOString()
     });
     
-    // When wallet disconnects, clear all cached queries
-    if (!isConnected && !isDisconnecting) {
-      queryClient.clear();
+    // When wallet disconnects, surgically remove only address-keyed queries
+    // (Avoids breaking unrelated cached data)
+    if (!isConnected && !isDisconnecting && address) {
+      queryClient.removeQueries({ queryKey: ['userByWallet', address.toLowerCase()] });
+      queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
     }
-  }, [isConnected, isDisconnecting]);
+  }, [isConnected, isDisconnecting, address]);
 
   const handleConnect = async () => {
     try {
@@ -109,11 +111,18 @@ function WalletProviderInner({ children }: { children: ReactNode }) {
   const handleDisconnect = async () => {
     console.log('[WalletProvider] DISCONNECT: Starting...');
     
+    // Capture address before disconnecting
+    const currentAddress = address;
+    
     // Clear backend session
     await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
     
-    // Clear query cache  
-    queryClient.clear();
+    // Surgically clear wallet-specific queries only
+    if (currentAddress) {
+      queryClient.removeQueries({ queryKey: ['userByWallet', currentAddress.toLowerCase()] });
+    }
+    queryClient.removeQueries({ queryKey: ['/api/auth/me'] });
+    queryClient.removeQueries({ queryKey: ['/api/messages'] });
     
     // Disconnect ALL wallets
     try {

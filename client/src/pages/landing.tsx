@@ -65,8 +65,8 @@ export default function Landing() {
     setIsLoggingIn(true);
     try {
       await login();
-      // Invalidate after successful login (mutation)
-      queryClient.invalidateQueries({ queryKey: ['userByWallet'] });
+      // Invalidate only this address's query (surgical invalidation)
+      queryClient.invalidateQueries({ queryKey: ['userByWallet', address?.toLowerCase()] });
       setTimeout(() => {
         setLocation('/app');
       }, 500);
