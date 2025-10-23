@@ -12,6 +12,7 @@ import AdminDashboard from "@/pages/admin/dashboard";
 import Profile from "@/pages/profile";
 import Register from "@/pages/register";
 import InboxPending from "@/pages/inbox-pending";
+import Outbox from "@/pages/outbox";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -23,6 +24,7 @@ function Router() {
       <Route path="/register" component={Register} />
       <Route path="/profile" component={Profile} />
       <Route path="/inbox" component={InboxPending} />
+      <Route path="/outbox" component={Outbox} />
       <Route path="/admin" component={AdminDashboard} />
       <Route path="/:identifier" component={PublicMessage} />
       <Route component={NotFound} />

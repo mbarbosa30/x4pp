@@ -77,17 +77,23 @@ export default function InboxPending() {
   const formatTimeRemaining = (expiresAt: string) => {
     const now = new Date();
     const expires = new Date(expiresAt);
-    const hoursRemaining = Math.max(0, Math.floor((expires.getTime() - now.getTime()) / (1000 * 60 * 60)));
+    const msRemaining = expires.getTime() - now.getTime();
     
-    if (hoursRemaining === 0) {
+    if (msRemaining <= 0) {
       return "Expired";
-    } else if (hoursRemaining < 1) {
-      const minutesRemaining = Math.floor((expires.getTime() - now.getTime()) / (1000 * 60));
+    }
+    
+    const minutesRemaining = Math.floor(msRemaining / (1000 * 60));
+    const hoursRemaining = Math.floor(msRemaining / (1000 * 60 * 60));
+    const daysRemaining = Math.floor(hoursRemaining / 24);
+    
+    if (minutesRemaining === 0) {
+      return "<1m left";
+    } else if (minutesRemaining < 60) {
       return `${minutesRemaining}m left`;
     } else if (hoursRemaining < 24) {
       return `${hoursRemaining}h left`;
     } else {
-      const daysRemaining = Math.floor(hoursRemaining / 24);
       return `${daysRemaining}d left`;
     }
   };

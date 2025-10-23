@@ -7,6 +7,69 @@ import { settlePayment, refundPayment } from "../celo-payment";
 const router = express.Router();
 
 /**
+ * GET /api/messages/sent
+ * Get messages sent by the authenticated user
+ */
+router.get("/sent", async (req, res) => {
+  try {
+    const userId = (req as any).session?.userId;
+    if (!userId) {
+      return res.status(401).json({ error: "Authentication required" });
+    }
+
+    // Get user's wallet address
+    const [user] = await db
+      .select({
+        walletAddress: users.walletAddress,
+      })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+
+    if (!user || !user.walletAddress) {
+      return res.status(404).json({ error: "User not found or wallet not configured" });
+    }
+
+    // Get sent messages with recipient info
+    const sentMessages = await db
+      .select({
+        id: messages.id,
+        senderWallet: messages.senderWallet,
+        recipientWallet: messages.recipientWallet,
+        content: messages.content,
+        bidUsd: messages.bidUsd,
+        replyBounty: messages.replyBounty,
+        status: messages.status,
+        sentAt: messages.sentAt,
+        expiresAt: messages.expiresAt,
+        acceptedAt: messages.acceptedAt,
+        declinedAt: messages.declinedAt,
+        // Recipient profile info (if registered)
+        recipientDisplayName: users.displayName,
+        recipientUsername: users.username,
+      })
+      .from(messages)
+      .leftJoin(users, sql`lower(${users.walletAddress}) = ${messages.recipientWallet}`)
+      .where(eq(messages.senderWallet, user.walletAddress.toLowerCase()))
+      .orderBy(desc(messages.sentAt));
+
+    // Serialize timestamps to ISO strings for proper frontend handling
+    const serializedMessages = sentMessages.map(msg => ({
+      ...msg,
+      sentAt: msg.sentAt ? msg.sentAt.toISOString() : null,
+      expiresAt: msg.expiresAt ? msg.expiresAt.toISOString() : null,
+      acceptedAt: msg.acceptedAt?.toISOString() || null,
+      declinedAt: msg.declinedAt?.toISOString() || null,
+    }));
+
+    res.json(serializedMessages);
+  } catch (error) {
+    console.error("Error fetching sent messages:", error);
+    res.status(500).json({ error: "Failed to fetch sent messages" });
+  }
+});
+
+/**
  * GET /api/messages/pending
  * Get pending messages for the authenticated user sorted by bid (descending)
  */

@@ -2,13 +2,14 @@ import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Mail, Inbox, Settings as SettingsIcon, LogOut } from "lucide-react";
+import { Mail, Inbox, Send as SendIcon, Settings as SettingsIcon, LogOut } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useWallet } from "@/providers/WalletProvider";
 import InboxPending from "@/pages/inbox-pending";
+import Outbox from "@/pages/outbox";
 import SettingsPanel from "@/components/SettingsPanel";
 import { Link } from "wouter";
 
@@ -121,10 +122,14 @@ export default function Home() {
       <main className="container mx-auto px-4 py-6">
         <div className="max-w-6xl mx-auto">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="mb-6 w-full sm:w-auto grid grid-cols-2 sm:flex h-11">
+            <TabsList className="mb-6 w-full sm:w-auto grid grid-cols-3 sm:flex h-11">
               <TabsTrigger value="inbox" data-testid="tab-inbox" className="gap-2">
                 <Inbox className="h-4 w-4" />
                 <span className="hidden sm:inline">Inbox</span>
+              </TabsTrigger>
+              <TabsTrigger value="outbox" data-testid="tab-outbox" className="gap-2">
+                <SendIcon className="h-4 w-4" />
+                <span className="hidden sm:inline">Sent</span>
               </TabsTrigger>
               <TabsTrigger value="settings" data-testid="tab-settings" className="gap-2">
                 <SettingsIcon className="h-4 w-4" />
@@ -134,6 +139,10 @@ export default function Home() {
 
             <TabsContent value="inbox" className="mt-0">
               <InboxPending />
+            </TabsContent>
+
+            <TabsContent value="outbox" className="mt-0">
+              <Outbox />
             </TabsContent>
 
             <TabsContent value="settings" className="mt-0">
