@@ -116,7 +116,7 @@ export default function Landing() {
                 <ArrowRight className="h-4 w-4 ml-2" />
               </Button>
             </Link>
-            <Link href="/app">
+            <Link href="/send">
               <Button size="lg" variant="outline" data-testid="button-send-message">
                 <Mail className="h-4 w-4 mr-2" />
                 Send a Message
