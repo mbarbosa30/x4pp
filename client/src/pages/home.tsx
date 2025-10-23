@@ -45,13 +45,13 @@ export default function Home() {
       return response.json();
     },
     onSuccess: () => {
+      // Disconnect wallet and navigate to home
       disconnect();
-      queryClient.clear();
       toast({
         title: "Logged out",
         description: "You've been logged out successfully",
       });
-      window.location.href = "/";
+      setLocation("/");
     },
     onError: () => {
       toast({

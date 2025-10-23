@@ -47,12 +47,6 @@ export default function Landing() {
     gcTime: 10 * 60 * 1000, // Keep in memory 10 min
   });
 
-  useEffect(() => {
-    if (isConnected && currentUser) {
-      setLocation('/app');
-    }
-  }, [isConnected, currentUser, setLocation]);
-
   const handleGoToDashboard = async () => {
     if (!isConnected || !address || isCheckingWallet) return;
     
@@ -67,9 +61,8 @@ export default function Landing() {
       await login();
       // Invalidate only this address's query (surgical invalidation)
       queryClient.invalidateQueries({ queryKey: ['userByWallet', address?.toLowerCase()] });
-      setTimeout(() => {
-        setLocation('/app');
-      }, 500);
+      // Navigate immediately - no delay needed
+      setLocation('/app');
     } catch (error) {
       console.error('Login failed:', error);
       setLocation('/register');

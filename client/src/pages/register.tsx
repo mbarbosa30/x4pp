@@ -16,6 +16,16 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
+interface AuthResponse {
+  user: {
+    id: string;
+    username: string;
+    displayName: string;
+    walletAddress: string;
+    verified: boolean;
+  };
+}
+
 const registrationFormSchema = z.object({
   username: z.string()
     .min(3, "Username must be at least 3 characters")
@@ -47,17 +57,10 @@ export default function Register() {
   const { toast } = useToast();
   const { address: walletAddress, isConnected, connect, disconnect } = useWallet();
   
-  // Check if already authenticated
-  const { data: currentUser } = useQuery({
+  // Check if already authenticated (no auto-redirect to avoid loops)
+  const { data: currentUser } = useQuery<AuthResponse | null>({
     queryKey: ['/api/auth/me'],
   });
-
-  // Redirect if already logged in
-  useEffect(() => {
-    if (currentUser) {
-      setLocation('/app');
-    }
-  }, [currentUser, setLocation]);
   
   const { data: tokens = [], isLoading: tokensLoading } = useQuery<Token[]>({
     queryKey: ['/api/tokens'],
@@ -91,7 +94,7 @@ export default function Register() {
       const response = await apiRequest("POST", "/api/users", data);
       return await response.json();
     },
-    onSuccess: async (data: any) => {
+    onSuccess: (data: any) => {
       console.log("Registration successful, user:", data.user.username);
       
       toast({
@@ -99,13 +102,9 @@ export default function Register() {
         description: `Welcome @${data.user.username}!`,
       });
       
-      // Wait a bit for session to be fully persisted
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      console.log("Redirecting to /app");
-      
-      // Use full page reload to ensure session cookie is picked up
-      window.location.href = "/app";
+      // Invalidate auth query and navigate immediately
+      queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
+      setLocation('/app');
     },
     onError: (error: any) => {
       console.error("Registration failed:", error);
@@ -129,6 +128,24 @@ export default function Register() {
 
     registerMutation.mutate({ ...data, walletAddress });
   };
+
+  // Show logged-in message if user is already authenticated
+  if (currentUser?.user) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <Card className="p-8 max-w-md w-full text-center space-y-4">
+          <CheckCircle className="h-16 w-16 mx-auto text-success" />
+          <h1 className="text-2xl font-bold">You're already registered!</h1>
+          <p className="text-muted-foreground">
+            Welcome back, @{currentUser.user.username}
+          </p>
+          <Button onClick={() => setLocation('/app')} className="w-full" data-testid="button-go-to-app">
+            Go to Inbox
+          </Button>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
