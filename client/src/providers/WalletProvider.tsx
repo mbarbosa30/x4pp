@@ -68,6 +68,11 @@ function WalletProviderInner({ children }: { children: ReactNode }) {
   const handleConnect = async () => {
     try {
       setIsConnecting(true);
+      console.log('[WalletProvider] CONNECT: Starting...', { appKit });
+      if (!appKit) {
+        console.error('[WalletProvider] AppKit not initialized!');
+        return;
+      }
       console.log('[WalletProvider] Opening wallet modal...');
       await appKit.open();
       console.log('[WalletProvider] Modal opened');
