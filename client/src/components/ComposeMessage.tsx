@@ -146,7 +146,7 @@ export default function ComposeMessage({ isVerified, onSend, initialRecipient }:
         recipientUsername: isWalletAddress ? undefined : recipient.replace(/^@/, ''),
         recipientWallet: isWalletAddress ? recipient.toLowerCase() : undefined,
         senderWallet: walletAddress, // Use connected wallet address as identifier
-        senderName: "Demo Sender",
+        senderName: walletAddress, // Use wallet address as sender identifier (formatted on display)
         content: message,
         bidUsd: bidAmount.toFixed(2),
         replyBounty: includeReplyBounty ? replyBounty.toFixed(2) : undefined,

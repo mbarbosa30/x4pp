@@ -1,4 +1,4 @@
-import { useRoute } from "wouter";
+import { useRoute, Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -47,10 +47,12 @@ export default function PublicMessage() {
       {/* Header */}
       <header className="border-b">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Mail className="h-6 w-6 text-primary" />
-            <span className="text-lg md:text-xl font-semibold">x4pp</span>
-          </div>
+          <Link href="/">
+            <div className="flex items-center gap-2 cursor-pointer hover-elevate active-elevate-2 px-2 py-1 rounded-md">
+              <Mail className="h-6 w-6 text-primary" />
+              <span className="text-lg md:text-xl font-semibold">x4pp</span>
+            </div>
+          </Link>
           <ThemeToggle />
         </div>
       </header>

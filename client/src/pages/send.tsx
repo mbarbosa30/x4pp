@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import { Mail } from "lucide-react";
 import ComposeMessage from "@/components/ComposeMessage";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -25,10 +25,12 @@ export default function Send() {
       {/* Header */}
       <header className="border-b">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Mail className="h-6 w-6 text-primary" />
-            <span className="text-lg md:text-xl font-semibold">x4pp</span>
-          </div>
+          <Link href="/">
+            <div className="flex items-center gap-2 cursor-pointer hover-elevate active-elevate-2 px-2 py-1 rounded-md">
+              <Mail className="h-6 w-6 text-primary" />
+              <span className="text-lg md:text-xl font-semibold">x4pp</span>
+            </div>
+          </Link>
           <div className="flex items-center gap-2">
             {isAuthenticated && !isLoading && (
               <Button 
