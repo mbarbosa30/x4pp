@@ -1,10 +1,26 @@
 import { createContext, useContext, useState, useEffect, useRef, ReactNode } from "react";
 import { WagmiProvider } from 'wagmi';
 import { getAccount, watchAccount, disconnect } from '@wagmi/core';
-import { wagmiConfig, modal } from "@/lib/reown-config";
+import { createAppKit } from '@reown/appkit/react';
+import { wagmiAdapter, celoChain, projectId, metadata } from "@/lib/reown-config";
 import { queryClient } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
+
+// Create the modal
+const modal = createAppKit({
+  adapters: [wagmiAdapter],
+  networks: [celoChain],
+  metadata,
+  projectId,
+  features: {
+    analytics: false,
+  },
+  themeMode: 'dark',
+  themeVariables: {
+    '--w3m-accent': 'hsl(262 70% 62%)', // Brand purple
+  },
+});
 
 interface WalletContextType {
   address: string | undefined;
@@ -25,7 +41,7 @@ function WalletProviderInner({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     // Initialize account state
-    const account = getAccount(wagmiConfig);
+    const account = getAccount(wagmiAdapter.wagmiConfig);
     console.log('WalletProvider: Initial account state', { 
       address: account.address, 
       isConnected: account.isConnected 
@@ -59,7 +75,7 @@ function WalletProviderInner({ children }: { children: ReactNode }) {
     }
 
     // Watch for account changes
-    const unwatch = watchAccount(wagmiConfig, {
+    const unwatch = watchAccount(wagmiAdapter.wagmiConfig, {
       async onChange(account) {
         const previousAddress = address;
         const previousConnected = isConnected;
@@ -156,7 +172,7 @@ function WalletProviderInner({ children }: { children: ReactNode }) {
   const handleDisconnect = async () => {
     try {
       // Disconnect wallet first
-      await disconnect(wagmiConfig);
+      await disconnect(wagmiAdapter.wagmiConfig);
       
       // Then logout from session and clean up
       await fetch('/api/auth/logout', {
@@ -197,7 +213,7 @@ function WalletProviderInner({ children }: { children: ReactNode }) {
 // Wrap WalletProviderInner with WagmiProvider
 export function WalletProvider({ children }: { children: ReactNode }) {
   return (
-    <WagmiProvider config={wagmiConfig}>
+    <WagmiProvider config={wagmiAdapter.wagmiConfig}>
       <WalletProviderInner>
         {children}
       </WalletProviderInner>

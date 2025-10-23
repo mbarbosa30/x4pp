@@ -3,7 +3,7 @@
 
 import { keccak256, toHex } from 'viem';
 import { signTypedData, getAccount } from '@wagmi/core';
-import { wagmiConfig } from './reown-config';
+import { wagmiAdapter } from './reown-config';
 
 export interface TransferWithAuthorizationParams {
   from: string;
@@ -77,13 +77,13 @@ export async function signTransferAuthorization(
 
   try {
     // Get the active account from wagmi
-    const account = getAccount(wagmiConfig);
+    const account = getAccount(wagmiAdapter.wagmiConfig);
     if (!account.address) {
       throw new Error('No wallet connected');
     }
 
     // Use wagmi's signTypedData which works with any wallet provider (MetaMask, WalletConnect, etc.)
-    const signature = await signTypedData(wagmiConfig, {
+    const signature = await signTypedData(wagmiAdapter.wagmiConfig, {
       account: account.address as `0x${string}`,
       domain,
       types,
