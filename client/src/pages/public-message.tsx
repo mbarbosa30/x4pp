@@ -78,43 +78,7 @@ export default function PublicMessage() {
                 <Badge variant="outline" className="mt-2">Unregistered Wallet</Badge>
               )}
             </div>
-            <p className="text-muted-foreground max-w-md mx-auto">
-              Send a message by placing a bid in USDC. The recipient manually reviews and accepts or declines.
-            </p>
           </div>
-          
-          {/* How it works */}
-          <Card className="p-4 sm:p-6 bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20">
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <Shield className="h-5 w-5 text-primary" />
-                <h2 className="font-semibold text-sm sm:text-base">How x4pp works</h2>
-              </div>
-              <div className="grid sm:grid-cols-3 gap-3 text-xs sm:text-sm">
-                <div className="flex gap-2">
-                  <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center text-primary font-semibold text-xs">1</div>
-                  <div>
-                    <div className="font-medium">Connect & Compose</div>
-                    <div className="text-xs text-muted-foreground">Sign an EIP-3009 authorization with your wallet</div>
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center text-primary font-semibold text-xs">2</div>
-                  <div>
-                    <div className="font-medium">Funds stay in wallet</div>
-                    <div className="text-xs text-muted-foreground">Your USDC doesn't move until they accept</div>
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center text-primary font-semibold text-xs">3</div>
-                  <div>
-                    <div className="font-medium">Auto-settlement or expiry</div>
-                    <div className="text-xs text-muted-foreground">Payment settles on-chain if accepted, or expires</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </Card>
 
           {/* Pricing Info */}
           <Card className="p-6">

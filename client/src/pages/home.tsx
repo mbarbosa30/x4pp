@@ -140,29 +140,6 @@ export default function Home() {
       {/* Main Content */}
       <main className="container mx-auto px-4 py-6">
         <div className="max-w-6xl mx-auto">
-          {/* Welcome Banner */}
-          <Card className="p-4 sm:p-6 mb-6 bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20">
-            <div className="flex gap-3 sm:gap-4">
-              <Shield className="h-6 w-6 sm:h-7 sm:w-7 text-primary flex-shrink-0 mt-0.5" />
-              <div className="flex-1 space-y-2">
-                <h2 className="text-base sm:text-lg font-semibold">Your Attention Market Dashboard</h2>
-                <p className="text-xs sm:text-sm text-muted-foreground">
-                  Incoming bids use EIP-3009 deferred authorizations—senders' USDC stays in their wallets until you accept. When you accept, payment settles on-chain automatically. If ignored, authorizations expire and no funds move.
-                </p>
-                <div className="flex flex-wrap gap-4 pt-2 text-xs">
-                  <div className="flex items-center gap-1.5">
-                    <Shield className="h-3.5 w-3.5 text-success" />
-                    <span className="text-muted-foreground">No escrow required</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <DollarSign className="h-3.5 w-3.5 text-primary" />
-                    <span className="text-muted-foreground">Payment settles on-chain automatically</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </Card>
-
           <Tabs value={activeTab} onValueChange={handleTabChange}>
             <TabsList className="mb-6 w-full sm:w-auto grid grid-cols-3 sm:flex h-11">
               <TabsTrigger value="inbox" data-testid="tab-inbox" className="gap-2">

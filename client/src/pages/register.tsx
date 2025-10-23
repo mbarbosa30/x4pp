@@ -124,52 +124,9 @@ export default function Register() {
         <div className="text-center space-y-2">
           <h1 className="text-4xl font-bold">Create Your Account</h1>
           <p className="text-muted-foreground">
-            Set up your x4pp profile to start monetizing your inbox
+            Claim your inbox and start earning USDC for your attention
           </p>
         </div>
-
-        {/* Value Proposition */}
-        <Card className="p-4 sm:p-6 bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20">
-          <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <Shield className="h-5 w-5 text-primary" />
-              <h2 className="font-semibold">Why register as a receiver?</h2>
-            </div>
-            <div className="grid sm:grid-cols-2 gap-3 text-sm">
-              <div className="flex gap-2">
-                <CheckCircle className="h-4 w-4 text-success flex-shrink-0 mt-0.5" />
-                <div>
-                  <div className="font-medium">Get paid for your attention</div>
-                  <div className="text-xs text-muted-foreground">Accept bids to earn USDC</div>
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <CheckCircle className="h-4 w-4 text-success flex-shrink-0 mt-0.5" />
-                <div>
-                  <div className="font-medium">EIP-3009 protection</div>
-                  <div className="text-xs text-muted-foreground">Funds only move when you accept</div>
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <CheckCircle className="h-4 w-4 text-success flex-shrink-0 mt-0.5" />
-                <div>
-                  <div className="font-medium">Set your own prices</div>
-                  <div className="text-xs text-muted-foreground">Control your minimum bid</div>
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <CheckCircle className="h-4 w-4 text-success flex-shrink-0 mt-0.5" />
-                <div>
-                  <div className="font-medium">Shareable profile link</div>
-                  <div className="text-xs text-muted-foreground">/@username for easy access</div>
-                </div>
-              </div>
-            </div>
-            <div className="text-xs text-muted-foreground pt-2 border-t border-primary/20">
-              <strong>Note:</strong> You can send messages to any wallet without registering. Registration is only needed to <em>receive</em> and accept bids.
-            </div>
-          </div>
-        </Card>
 
         <Card className="p-6">
           <Form {...form}>
@@ -182,20 +139,14 @@ export default function Register() {
                     Payment Wallet
                   </Label>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Your wallet address is where USDC payments settle when you accept bids via EIP-3009 authorization
+                    Where you'll receive USDC when you accept bids
                   </p>
                 </div>
                 {!isConnected ? (
-                  <div className="space-y-2">
-                    <Button type="button" onClick={connect} className="w-full" data-testid="button-connect-wallet">
-                      <Wallet className="h-4 w-4 mr-2" />
-                      Connect Celo Wallet
-                    </Button>
-                    <p className="text-xs text-muted-foreground">
-                      <Shield className="h-3 w-3 inline mr-1" />
-                      We use your wallet only for receiving payments—no fees, no custody
-                    </p>
-                  </div>
+                  <Button type="button" onClick={connect} className="w-full" data-testid="button-connect-wallet">
+                    <Wallet className="h-4 w-4 mr-2" />
+                    Connect Celo Wallet
+                  </Button>
                 ) : (
                   <div className="flex items-center gap-2">
                     <div className="flex-1 font-mono text-sm bg-muted p-3 rounded border" data-testid="text-connected-wallet">
