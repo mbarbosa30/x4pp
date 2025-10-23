@@ -1,43 +1,36 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { createAppKit } from '@reown/appkit/react';
 import { WagmiProvider } from 'wagmi';
-import { useAppKitAccount } from '@reown/appkit/react';
+import { useAppKitAccount, useAppKit } from '@reown/appkit/react';
 import { disconnect } from '@wagmi/core';
 import { wagmiAdapter, celoChain, metadata, projectId } from "@/lib/reown-config";
 import { queryClient } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 
-// Singleton modal instance
-let modalInstance: ReturnType<typeof createAppKit> | undefined;
-
-function getOrCreateModal() {
-  if (typeof window === 'undefined') return null;
-  
-  if (!modalInstance) {
-    modalInstance = createAppKit({
-      adapters: [wagmiAdapter],
-      networks: [celoChain],
-      metadata,
-      projectId,
-      features: {
-        analytics: false,
-        email: false,
-        socials: false,
-        onramp: false,
-        swaps: false,
-      },
-      themeMode: 'dark',
-      themeVariables: {
-        '--w3m-accent': 'hsl(262 70% 62%)',
-      },
-      allowUnsupportedChain: true,
-    });
-  }
-  
-  return modalInstance;
+// Initialize AppKit outside the component render cycle (per official docs)
+if (!projectId) {
+  console.error("AppKit Initialization Error: Project ID is missing.");
+} else {
+  createAppKit({
+    adapters: [wagmiAdapter],
+    projectId,
+    networks: [celoChain],
+    defaultNetwork: celoChain,
+    metadata,
+    features: {
+      analytics: false,
+      email: false,
+      socials: false,
+      onramp: false,
+      swaps: false,
+    },
+    themeMode: 'dark',
+    themeVariables: {
+      '--w3m-accent': 'hsl(262 70% 62%)',
+    },
+    allowUnsupportedChain: true,
+  });
 }
-
-const modal = getOrCreateModal();
 
 interface WalletContextType {
   address: string | undefined;
@@ -51,6 +44,7 @@ const WalletContext = createContext<WalletContextType | null>(null);
 
 function WalletProviderInner({ children }: { children: ReactNode }) {
   const { address, isConnected } = useAppKitAccount();
+  const { open } = useAppKit();
   const [isConnecting, setIsConnecting] = useState(false);
   const [, setLocation] = useLocation();
 
@@ -86,7 +80,7 @@ function WalletProviderInner({ children }: { children: ReactNode }) {
     try {
       setIsConnecting(true);
       console.log('[WalletProvider] Opening modal...');
-      modal?.open();
+      open();
     } catch (error) {
       console.error("Failed to open wallet modal:", error);
       throw error;
