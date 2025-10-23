@@ -1,8 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { createAppKit } from '@reown/appkit/react';
-import { WagmiProvider } from 'wagmi';
+import { WagmiProvider, useDisconnect } from 'wagmi';
 import { useAppKitAccount, useAppKit } from '@reown/appkit/react';
-import { disconnect } from '@wagmi/core';
 import { wagmiAdapter, celoChain, metadata, projectId } from "@/lib/reown-config";
 import { queryClient } from "@/lib/queryClient";
 import { useLocation } from "wouter";
@@ -44,7 +43,8 @@ const WalletContext = createContext<WalletContextType | null>(null);
 
 function WalletProviderInner({ children }: { children: ReactNode }) {
   const { address, isConnected } = useAppKitAccount();
-  const { open } = useAppKit();
+  const appKit = useAppKit();
+  const { disconnect: wagmiDisconnect } = useDisconnect();
   const [isConnecting, setIsConnecting] = useState(false);
   const [isDisconnecting, setIsDisconnecting] = useState(false);
   const [, setLocation] = useLocation();
@@ -89,7 +89,7 @@ function WalletProviderInner({ children }: { children: ReactNode }) {
     try {
       setIsConnecting(true);
       console.log('[WalletProvider] Opening modal...');
-      open();
+      appKit.open();
     } catch (error) {
       console.error("Failed to open wallet modal:", error);
       throw error;
@@ -99,21 +99,24 @@ function WalletProviderInner({ children }: { children: ReactNode }) {
   };
 
   const handleDisconnect = async () => {
-    console.log('[WalletProvider] KILLING SESSION AND DISCONNECTING WALLET');
+    console.log('[WalletProvider] DISCONNECT: Killing session and wallet connection');
     setIsDisconnecting(true);
     
-    // Kill backend session
-    fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
+    // Clear backend session
+    await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
     
-    // Clear all cache
+    // Clear query cache
     queryClient.setQueryData(['/api/auth/me'], null);
     queryClient.clear();
     
-    // Disconnect wallet completely
-    disconnect(wagmiAdapter.wagmiConfig).catch(() => {});
+    // Disconnect wallet using proper wagmi hook
+    wagmiDisconnect();
     
-    // Redirect to landing
+    console.log('[WalletProvider] DISCONNECT: Complete, redirecting to landing');
     setLocation('/');
+    
+    // Keep the flag set for a bit to prevent auto-reconnect
+    setTimeout(() => setIsDisconnecting(false), 1000);
   };
 
   return (
