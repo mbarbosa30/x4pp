@@ -1,5 +1,4 @@
-import { useEffect, useRef } from "react";
-import { Link, useLocation } from "wouter";
+import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -16,46 +15,9 @@ import {
 } from "lucide-react";
 import { SiGithub } from "react-icons/si";
 import ThemeToggle from "@/components/ThemeToggle";
-import { useWallet } from "@/providers/WalletProvider";
-import { useToast } from "@/hooks/use-toast";
-import { useMutation } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { ConnectButton } from "@/components/ConnectButton";
 
 export default function Landing() {
-  const { address: walletAddress, isConnected, connect, disconnect } = useWallet();
-  const [, setLocation] = useLocation();
-  const { toast } = useToast();
-
-  const handleConnect = async () => {
-    if (!isConnected) {
-      try {
-        await connect();
-        // Auto-login handled by WalletProvider
-      } catch (error) {
-        toast({
-          title: "Connection failed",
-          description: "Failed to connect wallet",
-          variant: "destructive",
-        });
-      }
-    }
-  };
-
-  const handleDisconnect = async () => {
-    try {
-      await disconnect();
-      toast({
-        title: "Wallet disconnected",
-        description: "Your wallet has been disconnected",
-      });
-    } catch (error) {
-      toast({
-        title: "Disconnect failed",
-        description: "Failed to disconnect wallet",
-        variant: "destructive",
-      });
-    }
-  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -68,30 +30,7 @@ export default function Landing() {
           </div>
           <div className="flex items-center gap-3">
             <ThemeToggle />
-            {isConnected ? (
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground hidden sm:inline">
-                  {walletAddress?.slice(0, 6)}...{walletAddress?.slice(-4)}
-                </span>
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  data-testid="button-disconnect"
-                  onClick={handleDisconnect}
-                >
-                  Disconnect
-                </Button>
-              </div>
-            ) : (
-              <Button 
-                variant="outline" 
-                data-testid="button-connect"
-                onClick={handleConnect}
-              >
-                <Wallet className="h-4 w-4 mr-2" />
-                Connect
-              </Button>
-            )}
+            <ConnectButton />
           </div>
         </div>
       </header>
