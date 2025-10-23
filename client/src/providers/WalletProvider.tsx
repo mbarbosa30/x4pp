@@ -50,7 +50,14 @@ function WalletProviderInner({ children }: { children: ReactNode }) {
 
   // Auto-login when wallet connects
   useEffect(() => {
+    console.log('[WalletProvider] State changed:', { 
+      isConnected, 
+      address,
+      timestamp: new Date().toISOString()
+    });
+    
     if (isConnected && address) {
+      console.log('[WalletProvider] Attempting auto-login...');
       fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -58,8 +65,13 @@ function WalletProviderInner({ children }: { children: ReactNode }) {
       }).then(async (res) => {
         if (res.ok) {
           const data = await res.json();
+          console.log('[WalletProvider] Auto-login successful:', data);
           queryClient.setQueryData(['/api/auth/me'], data);
+        } else {
+          console.error('[WalletProvider] Auto-login failed:', res.status);
         }
+      }).catch(err => {
+        console.error('[WalletProvider] Auto-login error:', err);
       });
     }
   }, [isConnected, address]);
