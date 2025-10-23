@@ -1,19 +1,9 @@
 import { Button } from '@/components/ui/button';
 import { Wallet } from 'lucide-react';
 import { useWallet } from '@/providers/WalletProvider';
-import { useLocation } from 'wouter';
-import { useEffect } from 'react';
 
 export function ConnectButton() {
-  const { isConnected, address, connect, disconnect, login } = useWallet();
-  const [, setLocation] = useLocation();
-
-  // Auto-login when wallet connects
-  useEffect(() => {
-    if (isConnected && address) {
-      login();
-    }
-  }, [isConnected, address, login]);
+  const { isConnected, address, connect, disconnect } = useWallet();
 
   const handleDisconnect = async () => {
     await disconnect();
