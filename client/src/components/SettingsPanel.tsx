@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Save, DollarSign } from "lucide-react";
+import { Save, DollarSign, Shield, Info } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -101,6 +101,19 @@ export default function SettingsPanel() {
   return (
     <Card className="p-4 sm:p-6">
       <div className="space-y-8">
+        {/* Info banner */}
+        <Card className="p-4 bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20">
+          <div className="flex gap-3">
+            <Info className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+            <div className="text-sm">
+              <div className="font-semibold mb-1">How pricing works</div>
+              <div className="text-xs text-muted-foreground">
+                Your minimum bid sets the floor. Senders can bid any amount above it. Higher bids appear more attractive in your inbox. You manually accept or decline each bid.
+              </div>
+            </div>
+          </div>
+        </Card>
+
         <div>
           <h3 className="text-base sm:text-lg font-semibold mb-4">Open Bidding Configuration</h3>
           <div className="space-y-6">
@@ -159,7 +172,10 @@ export default function SettingsPanel() {
         </div>
 
         <div>
-          <h3 className="text-lg font-semibold mb-4">Payment Wallet</h3>
+          <div className="flex items-center gap-2 mb-4">
+            <Shield className="h-5 w-5 text-success" />
+            <h3 className="text-lg font-semibold">Payment Wallet</h3>
+          </div>
           <div>
             <Label htmlFor="wallet">Celo Wallet Address</Label>
             <Input
@@ -171,9 +187,10 @@ export default function SettingsPanel() {
               className="mt-2 font-mono text-sm"
               data-testid="input-wallet-address"
             />
-            <p className="text-xs text-muted-foreground mt-1">
-              Where you'll receive USDC payments
-            </p>
+            <div className="text-xs text-muted-foreground mt-2 p-2 bg-success/5 rounded border border-success/20">
+              <Shield className="h-3 w-3 inline mr-1" />
+              Payments settle here via EIP-3009 when you accept bids. Senders' funds stay in their wallets until you accept.
+            </div>
           </div>
         </div>
 

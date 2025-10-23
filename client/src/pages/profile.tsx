@@ -11,6 +11,8 @@ import {
   Copy,
   Settings,
   ExternalLink,
+  Shield,
+  Info,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
@@ -150,10 +152,13 @@ export default function Profile() {
         </Card>
 
         {/* Shareable Link */}
-        <Card className="p-4 sm:p-6">
-          <h3 className="text-base sm:text-lg font-semibold mb-4">Your Shareable Link</h3>
+        <Card className="p-4 sm:p-6 bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20">
+          <div className="flex items-center gap-2 mb-4">
+            <Mail className="h-5 w-5 text-primary" />
+            <h3 className="text-base sm:text-lg font-semibold">Your Shareable Link</h3>
+          </div>
           <div className="flex flex-col sm:flex-row gap-2">
-            <div className="flex-1 font-mono text-xs sm:text-sm bg-muted p-3 rounded border break-all" data-testid="text-shareable-link">
+            <div className="flex-1 font-mono text-xs sm:text-sm bg-background p-3 rounded border break-all" data-testid="text-shareable-link">
               {shareableLink}
             </div>
             <div className="flex gap-2">
@@ -169,8 +174,8 @@ export default function Profile() {
               </a>
             </div>
           </div>
-          <p className="text-xs text-muted-foreground mt-2">
-            Share this link to receive paid messages
+          <p className="text-xs text-muted-foreground mt-3">
+            Share this link so others can send you paid messages. They can bid any amount above your minimum.
           </p>
         </Card>
 
@@ -226,8 +231,11 @@ export default function Profile() {
         {/* Wallet Info */}
         {profile.walletAddress && (
           <Card className="p-4 sm:p-6">
-            <h3 className="text-base sm:text-lg font-semibold mb-4">Payment Wallet</h3>
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+            <div className="flex items-center gap-2 mb-4">
+              <Shield className="h-5 w-5 text-success" />
+              <h3 className="text-base sm:text-lg font-semibold">Payment Wallet</h3>
+            </div>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 mb-3">
               <p className="font-mono text-xs sm:text-sm bg-muted p-3 rounded border flex-1 break-all w-full" data-testid="text-wallet-address">
                 {profile.walletAddress}
               </p>
@@ -243,6 +251,14 @@ export default function Profile() {
                   <span className="sm:hidden">Celoscan</span>
                 </Button>
               </a>
+            </div>
+            <div className="text-xs text-muted-foreground p-3 bg-success/5 rounded border border-success/20">
+              <div className="flex gap-2">
+                <Info className="h-3.5 w-3.5 text-success flex-shrink-0 mt-0.5" />
+                <div>
+                  Payments settle here via EIP-3009 when you accept bids. Senders' funds stay in their wallets until you accept—no custodial escrow.
+                </div>
+              </div>
             </div>
           </Card>
         )}

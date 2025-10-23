@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Clock, CheckCircle, XCircle, Mail } from "lucide-react";
+import { Clock, CheckCircle, XCircle, Mail, Shield } from "lucide-react";
 
 interface SentMessage {
   id: string;
@@ -122,8 +122,21 @@ export default function Outbox() {
       <div className="container mx-auto px-4 py-8 max-w-4xl">
         <div className="mb-6">
           <h1 className="text-3xl font-bold">Sent Messages</h1>
-          <p className="text-muted-foreground mt-2">Track the status of messages you've sent</p>
+          <p className="text-muted-foreground mt-2">Track your EIP-3009 authorization status</p>
         </div>
+        
+        {/* Info banner */}
+        <Card className="p-4 mb-6 bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20">
+          <div className="flex gap-3">
+            <Shield className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+            <div className="text-sm">
+              <div className="font-semibold mb-1">Your funds stay in your wallet</div>
+              <div className="text-xs text-muted-foreground">
+                Pending messages are EIP-3009 payment authorizations. Your USDC only moves if the receiver accepts. If they decline or ignore, the authorization expires automatically.
+              </div>
+            </div>
+          </div>
+        </Card>
 
         {messages.length === 0 ? (
           <Card className="p-8">

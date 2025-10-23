@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { useLocation, Link } from "wouter";
-import { Mail } from "lucide-react";
+import { Mail, Shield, CheckCircle } from "lucide-react";
 import ComposeMessage from "@/components/ComposeMessage";
 import ThemeToggle from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { useAuth } from "@/hooks/useAuth";
 
 export default function Send() {
@@ -58,6 +59,39 @@ export default function Send() {
               Connect your wallet and send a message to any username or wallet address
             </p>
           </div>
+          
+          {/* How it works */}
+          <Card className="p-4 sm:p-6 bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20">
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Shield className="h-5 w-5 text-primary" />
+                <h2 className="font-semibold">How sending works</h2>
+              </div>
+              <div className="grid sm:grid-cols-3 gap-3 text-sm">
+                <div className="flex gap-2">
+                  <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center text-primary font-semibold text-xs">1</div>
+                  <div>
+                    <div className="font-medium">Sign authorization</div>
+                    <div className="text-xs text-muted-foreground">EIP-3009 payment signature—no USDC leaves your wallet yet</div>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center text-primary font-semibold text-xs">2</div>
+                  <div>
+                    <div className="font-medium">Receiver reviews</div>
+                    <div className="text-xs text-muted-foreground">They decide to accept or decline your bid</div>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center text-primary font-semibold text-xs">3</div>
+                  <div>
+                    <div className="font-medium">Settle or expire</div>
+                    <div className="text-xs text-muted-foreground">Payment processes if accepted, auth expires if ignored</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Card>
 
           {/* Compose Form */}
           <ComposeMessage 
