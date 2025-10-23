@@ -1,4 +1,6 @@
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
+import { useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -16,8 +18,25 @@ import {
 import { SiGithub } from "react-icons/si";
 import ThemeToggle from "@/components/ThemeToggle";
 import { ConnectButton } from "@/components/ConnectButton";
+import { useWallet } from "@/providers/WalletProvider";
 
 export default function Landing() {
+  const { isConnected } = useWallet();
+  const [, setLocation] = useLocation();
+  
+  // Check if user is already registered
+  const { data: currentUser } = useQuery({
+    queryKey: ['/api/auth/me'],
+    enabled: isConnected,
+  });
+
+  // Auto-redirect registered users to inbox
+  useEffect(() => {
+    if (isConnected && currentUser) {
+      console.log('[Landing] User connected and registered, redirecting to inbox');
+      setLocation('/inbox');
+    }
+  }, [isConnected, currentUser, setLocation]);
 
   return (
     <div className="min-h-screen bg-background">
