@@ -28,9 +28,9 @@ export const metadata = {
   icons: ['https://x4pp.app/favicon.ico'],
 };
 
-// WagmiAdapter without explicit connectors - AppKit will manage them
+// WagmiAdapter - storage is handled automatically
 export const wagmiAdapter = new WagmiAdapter({
   networks: [celoChain],
   projectId,
-  ssr: false
+  ssr: false,
 });
