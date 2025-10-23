@@ -97,7 +97,7 @@ router.post("/", async (req, res) => {
       const { user: foundUser, token: foundToken } = result[0];
       recipient = foundUser;
       paymentToken = foundToken;
-      recipientWallet = recipient.walletAddress;
+      recipientWallet = recipient.walletAddress.toLowerCase();
 
       if (!recipient.walletAddress) {
         return res.status(400).json({ 
