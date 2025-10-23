@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, useRef, ReactNode } from "react";
+import { WagmiProvider } from 'wagmi';
 import { getAccount, watchAccount, disconnect } from '@wagmi/core';
 import { wagmiConfig, modal } from "@/lib/reown-config";
 import { queryClient } from "@/lib/queryClient";
@@ -15,7 +16,7 @@ interface WalletContextType {
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
-export function WalletProvider({ children }: { children: ReactNode }) {
+function WalletProviderInner({ children }: { children: ReactNode }) {
   const [address, setAddress] = useState<string | undefined>();
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
@@ -190,6 +191,17 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     >
       {children}
     </WalletContext.Provider>
+  );
+}
+
+// Wrap WalletProviderInner with WagmiProvider
+export function WalletProvider({ children }: { children: ReactNode }) {
+  return (
+    <WagmiProvider config={wagmiConfig}>
+      <WalletProviderInner>
+        {children}
+      </WalletProviderInner>
+    </WagmiProvider>
   );
 }
 
