@@ -21,9 +21,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [isConnecting, setIsConnecting] = useState(false);
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  
-  // Track intentional disconnects to prevent auto-login loop
-  const isIntentionalDisconnect = useRef(false);
 
   useEffect(() => {
     // Initialize account state
@@ -51,21 +48,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           } catch (logoutError) {
             console.error('Failed to logout:', logoutError);
           }
-          // Clear the intentional disconnect flag since disconnect is complete
-          isIntentionalDisconnect.current = false;
           return;
         }
 
         // Handle new wallet connection or account switch
         if (account.isConnected && account.address) {
-          // Skip auto-login if this is right after an intentional disconnect
-          if (isIntentionalDisconnect.current) {
-            console.log('Skipping auto-login after intentional disconnect');
-            // Clear the flag now that we've skipped once
-            isIntentionalDisconnect.current = false;
-            return;
-          }
-          
           // If it's a new address or first connection, try auto-login
           if (!previousAddress || account.address !== previousAddress) {
             try {
@@ -121,8 +108,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const handleConnect = async () => {
     try {
       setIsConnecting(true);
-      // Clear the disconnect flag when user explicitly tries to connect
-      isIntentionalDisconnect.current = false;
       // Open Reown AppKit modal for wallet connection
       await modal.open();
     } catch (error) {
@@ -135,36 +120,26 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   const handleDisconnect = async () => {
     try {
-      // Mark this as an intentional disconnect to prevent auto-login
-      isIntentionalDisconnect.current = true;
-      
+      // Disconnect wallet first
       await disconnect(wagmiConfig);
+      
+      // Then logout from session and clean up
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+      });
+      
+      // Clear React Query cache
+      queryClient.clear();
+      
+      // Update local state
       setAddress(undefined);
       setIsConnected(false);
-
-      // Logout from session
-      try {
-        await fetch('/api/auth/logout', {
-          method: 'POST',
-          credentials: 'include',
-        });
-        
-        // Clear React Query cache
-        queryClient.clear();
-        
-        // Navigate to home without reload
-        setLocation('/');
-        
-        // Note: Flag will be cleared automatically when disconnect is detected in watchAccount
-      } catch (logoutError) {
-        console.error('Failed to logout:', logoutError);
-        // Clear flag even on error
-        isIntentionalDisconnect.current = false;
-      }
+      
+      // Navigate to home
+      setLocation('/');
     } catch (error) {
-      console.error("Failed to disconnect wallet:", error);
-      // Clear flag on error
-      isIntentionalDisconnect.current = false;
+      console.error("Failed to disconnect:", error);
       throw error;
     }
   };
