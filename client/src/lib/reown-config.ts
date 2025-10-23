@@ -1,7 +1,6 @@
-import { createAppKit } from '@reown/appkit/react';
 import { WagmiAdapter } from '@reown/appkit-adapter-wagmi';
-import { celo } from '@reown/appkit/networks';
-import type { AppKitNetwork } from '@reown/appkit/networks';
+import { celo } from '@wagmi/core/chains';
+import { walletConnect, injected, coinbaseWallet } from '@wagmi/connectors';
 
 export const projectId = import.meta.env.VITE_REOWN_PROJECT_ID;
 
@@ -9,36 +8,41 @@ if (!projectId) {
   throw new Error('VITE_REOWN_PROJECT_ID is not set');
 }
 
+const celoRpcUrl = import.meta.env.VITE_CELO_RPC_URL || 'https://forno.celo.org';
+
+export const celoChain = {
+  ...celo,
+  rpcUrls: {
+    default: {
+      http: [celoRpcUrl],
+    },
+    public: {
+      http: [celoRpcUrl],
+    },
+  },
+};
+
 export const metadata = {
   name: 'x4pp',
   description: 'P2P Attention Market - Get paid to read messages',
-  url: typeof window !== 'undefined' ? window.location.origin : '',
-  icons: ['https://avatars.githubusercontent.com/u/179229932'],
+  url: typeof window !== 'undefined' ? window.location.origin : 'https://x4pp.app',
+  icons: ['https://x4pp.app/favicon.ico'],
 };
 
-// Debug: Log the metadata URL
-if (typeof window !== 'undefined') {
-  console.log('[Reown Config] Metadata URL:', metadata.url);
-  console.log('[Reown Config] Window origin:', window.location.origin);
-}
-
-const networks: [AppKitNetwork, ...AppKitNetwork[]] = [celo];
-
-// Create Wagmi Adapter
 export const wagmiAdapter = new WagmiAdapter({
-  networks,
+  networks: [celoChain],
   projectId,
-  ssr: false
-});
-
-// Create modal - MUST be outside React components
-export const appKit = createAppKit({
-  adapters: [wagmiAdapter],
-  networks,
-  projectId,
-  metadata,
-  features: {
-    analytics: false
-  },
-  themeMode: 'dark'
+  connectors: [
+    walletConnect({
+      projectId,
+      metadata,
+      showQrModal: false,
+      relayUrl: 'wss://relay.walletconnect.com',
+    }),
+    injected({ shimDisconnect: true }),
+    coinbaseWallet({
+      appName: metadata.name,
+      appLogoUrl: metadata.icons[0],
+    }),
+  ],
 });
