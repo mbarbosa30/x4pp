@@ -61,12 +61,13 @@ export async function signTransferAuthorization(
   // Request signature from wallet using EIP-712
   const domain = USDC_CELO_DOMAIN;
   const types = TRANSFER_WITH_AUTHORIZATION_TYPES;
+  // wagmi's signTypedData expects bigint values for uint256 types, not strings
   const message = {
     from: params.from,
     to: params.to,
-    value: params.value.toString(),
-    validAfter: params.validAfter.toString(),
-    validBefore: params.validBefore.toString(),
+    value: params.value,
+    validAfter: params.validAfter,
+    validBefore: params.validBefore,
     nonce: params.nonce,
   };
 
