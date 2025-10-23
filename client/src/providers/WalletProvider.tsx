@@ -1,13 +1,13 @@
-import { createContext, useContext, useState, useEffect, useRef, ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { WagmiProvider } from 'wagmi';
 import { getAccount, watchAccount, disconnect } from '@wagmi/core';
-import { createAppKit } from '@reown/appkit/react';
+import { createAppKit, useAppKitAccount } from '@reown/appkit/react';
 import { wagmiAdapter, celoChain, projectId, metadata } from "@/lib/reown-config";
 import { queryClient } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 
-// Create the modal
+// Create modal instance
 const modal = createAppKit({
   adapters: [wagmiAdapter],
   networks: [celoChain],
@@ -18,7 +18,7 @@ const modal = createAppKit({
   },
   themeMode: 'dark',
   themeVariables: {
-    '--w3m-accent': 'hsl(262 70% 62%)', // Brand purple
+    '--w3m-accent': 'hsl(262 70% 62%)',
   },
 });
 
@@ -32,134 +32,70 @@ interface WalletContextType {
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
+// Inner provider that uses AppKit hooks
 function WalletProviderInner({ children }: { children: ReactNode }) {
-  const [address, setAddress] = useState<string | undefined>();
-  const [isConnected, setIsConnected] = useState(false);
+  const { address, isConnected } = useAppKitAccount();
   const [isConnecting, setIsConnecting] = useState(false);
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
   useEffect(() => {
-    // Initialize account state
-    const account = getAccount(wagmiAdapter.wagmiConfig);
-    console.log('WalletProvider: Initial account state', { 
-      address: account.address, 
-      isConnected: account.isConnected 
-    });
-    setAddress(account.address);
-    setIsConnected(account.isConnected);
-    
-    // If already connected on mount, trigger auto-login
-    if (account.isConnected && account.address) {
-      console.log('WalletProvider: Already connected on mount, attempting auto-login');
+    // Auto-login when wallet connects
+    if (isConnected && address) {
+      console.log('WalletProvider: Wallet connected, attempting auto-login');
       fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ walletAddress: account.address }),
+        body: JSON.stringify({ walletAddress: address }),
         credentials: 'include',
       }).then(async response => {
         if (response.ok) {
           const data = await response.json();
-          console.log('Auto-logged in on mount as:', data.user.username);
+          console.log('Auto-logged in as:', data.user.username);
           queryClient.setQueryData(['/api/auth/me'], data);
           
           if (window.location.pathname === '/') {
             setLocation('/app');
           }
         } else {
-          console.log('No account found for connected wallet on mount');
+          console.log('No account found for this wallet');
+          
+          const currentPath = window.location.pathname;
+          if (currentPath === '/' || currentPath === '/app' || currentPath.startsWith('/app/')) {
+            toast({
+              title: "Account Not Found",
+              description: "Please register to start using x4pp",
+              variant: "default",
+            });
+            
+            setTimeout(() => {
+              setLocation('/register');
+            }, 1500);
+          }
         }
       }).catch(err => {
-        console.error('Auto-login on mount failed:', err);
+        console.error('Auto-login failed:', err);
       });
     }
+  }, [isConnected, address]);
 
-    // Watch for account changes
-    const unwatch = watchAccount(wagmiAdapter.wagmiConfig, {
-      async onChange(account) {
-        const previousAddress = address;
-        const previousConnected = isConnected;
-        
-        console.log('WalletProvider: Account changed', {
-          from: { address: previousAddress, connected: previousConnected },
-          to: { address: account.address, connected: account.isConnected }
-        });
-        
-        setAddress(account.address);
-        setIsConnected(account.isConnected);
-
-        // Handle wallet disconnect (external or via disconnect button)
-        if (previousConnected && !account.isConnected) {
-          try {
-            await fetch('/api/auth/logout', {
-              method: 'POST',
-              credentials: 'include',
-            });
-            console.log('Logged out due to wallet disconnect');
-          } catch (logoutError) {
-            console.error('Failed to logout:', logoutError);
-          }
-          return;
-        }
-
-        // Handle new wallet connection or account switch
-        if (account.isConnected && account.address) {
-          // If it's a new address or first connection, try auto-login
-          if (!previousAddress || account.address !== previousAddress) {
-            try {
-              const response = await fetch('/api/auth/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ walletAddress: account.address }),
-                credentials: 'include',
-              });
-
-              if (response.ok) {
-                const data = await response.json();
-                console.log('Auto-logged in as:', data.user.username);
-                
-                // Pre-populate the auth cache to prevent loading state
-                queryClient.setQueryData(['/api/auth/me'], data);
-                
-                // If on landing page, navigate to dashboard
-                if (window.location.pathname === '/') {
-                  setLocation('/app');
-                }
-                // Otherwise stay on current page (e.g., /send)
-              } else {
-                // User not registered
-                console.log('No account found for this wallet');
-                
-                // Only redirect to register if on landing page or protected pages
-                const currentPath = window.location.pathname;
-                if (currentPath === '/' || currentPath === '/app' || currentPath.startsWith('/app/')) {
-                  toast({
-                    title: "Account Not Found",
-                    description: "Please register to start using x4pp",
-                    variant: "default",
-                  });
-                  
-                  setTimeout(() => {
-                    setLocation('/register');
-                  }, 1500);
-                }
-                // If on public pages like /send, just stay there
-              }
-            } catch (loginError) {
-              console.log('Auto-login failed:', loginError);
-            }
-          }
-        }
-      },
-    });
-
-    return () => unwatch();
-  }, [address, isConnected]);
+  // Handle disconnect
+  useEffect(() => {
+    if (!isConnected) {
+      // Logout when wallet disconnects
+      fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+      }).catch(err => {
+        console.error('Logout failed:', err);
+      });
+    }
+  }, [isConnected]);
 
   const handleConnect = async () => {
     try {
       setIsConnecting(true);
-      // Open Reown AppKit modal for wallet connection
+      // Open the Reown AppKit modal
       modal.open();
     } catch (error) {
       console.error("Failed to open wallet modal:", error);
@@ -171,23 +107,14 @@ function WalletProviderInner({ children }: { children: ReactNode }) {
 
   const handleDisconnect = async () => {
     try {
-      // Disconnect wallet first
       await disconnect(wagmiAdapter.wagmiConfig);
       
-      // Then logout from session and clean up
       await fetch('/api/auth/logout', {
         method: 'POST',
         credentials: 'include',
       });
       
-      // Clear React Query cache
       queryClient.clear();
-      
-      // Update local state
-      setAddress(undefined);
-      setIsConnected(false);
-      
-      // Navigate to home
       setLocation('/');
     } catch (error) {
       console.error("Failed to disconnect:", error);
@@ -210,7 +137,7 @@ function WalletProviderInner({ children }: { children: ReactNode }) {
   );
 }
 
-// Wrap WalletProviderInner with WagmiProvider
+// Main provider that wraps with WagmiProvider
 export function WalletProvider({ children }: { children: ReactNode }) {
   return (
     <WagmiProvider config={wagmiAdapter.wagmiConfig}>
