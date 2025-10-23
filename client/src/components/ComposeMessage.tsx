@@ -90,12 +90,20 @@ export default function ComposeMessage({ isVerified, onSend, initialRecipient }:
   // Auto-complete payment if we have a stored signature
   useEffect(() => {
     const completeStoredPayment = async () => {
-      if (!storedPaymentProof || !originalCommitPayload) return;
+      console.log('Auto-complete effect running...', { 
+        hasStoredProof: !!storedPaymentProof, 
+        hasCommitPayload: !!originalCommitPayload 
+      });
+      
+      if (!storedPaymentProof || !originalCommitPayload) {
+        console.log('No stored payment proof or commit payload, skipping auto-complete');
+        return;
+      }
       
       setIsPaying(true);
       
       try {
-        console.log('Auto-completing payment with stored signature...');
+        console.log('Auto-completing payment with stored signature...', storedPaymentProof);
         
         const response = await fetch("/api/commit", {
           method: "POST",
@@ -469,10 +477,14 @@ export default function ComposeMessage({ isVerified, onSend, initialRecipient }:
       // Save signature to sessionStorage in case page refreshes
       try {
         const pendingData = sessionStorage.getItem('pendingPayment');
+        console.log('Saving signature to sessionStorage...', { hasPendingData: !!pendingData, paymentProof });
         if (pendingData) {
           const parsed = JSON.parse(pendingData);
           parsed.paymentProof = paymentProof;
           sessionStorage.setItem('pendingPayment', JSON.stringify(parsed));
+          console.log('Signature saved successfully');
+        } else {
+          console.warn('No pending payment data found in sessionStorage to update');
         }
       } catch (storageError) {
         console.warn('Failed to save signature to sessionStorage:', storageError);
