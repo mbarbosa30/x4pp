@@ -30,11 +30,11 @@ export default function Landing() {
     enabled: isConnected,
   });
 
-  // Auto-redirect registered users to inbox
+  // Auto-redirect registered users to app
   useEffect(() => {
     if (isConnected && currentUser) {
-      console.log('[Landing] User connected and registered, redirecting to inbox');
-      setLocation('/inbox');
+      console.log('[Landing] User connected and registered, redirecting to app');
+      setLocation('/app');
     }
   }, [isConnected, currentUser, setLocation]);
 
