@@ -15,11 +15,16 @@ const modal = createAppKit({
   projectId,
   features: {
     analytics: false,
+    email: false,
+    socials: false,
+    onramp: false,
+    swaps: false,
   },
   themeMode: 'dark',
   themeVariables: {
     '--w3m-accent': 'hsl(262 70% 62%)',
   },
+  allowUnsupportedChain: true,
 });
 
 interface WalletContextType {
