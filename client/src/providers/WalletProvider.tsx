@@ -45,7 +45,7 @@ const WalletContext = createContext<WalletContextType | null>(null);
 function WalletProviderInner({ children }: { children: ReactNode }) {
   const { address, isConnected } = useAppKitAccount();
   const appKit = useAppKit();
-  const { disconnect: wagmiDisconnect } = useDisconnect();
+  const { disconnectAsync: wagmiDisconnectAsync } = useDisconnect();
   const [isConnecting, setIsConnecting] = useState(false);
   const [isDisconnecting, setIsDisconnecting] = useState(false);
   const [, setLocation] = useLocation();
@@ -101,24 +101,33 @@ function WalletProviderInner({ children }: { children: ReactNode }) {
   };
 
   const handleDisconnect = async () => {
-    console.log('[WalletProvider] DISCONNECT: Killing session and wallet connection');
-    setIsDisconnecting(true);
-    
-    // Clear backend session
-    await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
-    
-    // Clear query cache
-    queryClient.setQueryData(['/api/auth/me'], null);
-    queryClient.clear();
-    
-    // Disconnect wallet using proper wagmi hook
-    wagmiDisconnect();
-    
-    console.log('[WalletProvider] DISCONNECT: Complete, redirecting to landing');
-    setLocation('/');
-    
-    // Keep the flag set for a bit to prevent auto-reconnect
-    setTimeout(() => setIsDisconnecting(false), 1000);
+    try {
+      console.log('[WalletProvider] DISCONNECT: Starting...');
+      setIsDisconnecting(true);
+      
+      // Clear backend session first
+      await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
+      
+      // Clear query cache
+      queryClient.setQueryData(['/api/auth/me'], null);
+      queryClient.clear();
+      
+      // CRITICAL: Disconnect AppKit session FIRST (clears WalletConnect pairing)
+      console.log('[WalletProvider] Disconnecting AppKit...');
+      await appKit.disconnect();
+      
+      // Then disconnect wagmi
+      console.log('[WalletProvider] Disconnecting wagmi...');
+      await wagmiDisconnectAsync();
+      
+      console.log('[WalletProvider] DISCONNECT: Complete');
+      setLocation('/');
+    } catch (error) {
+      console.error('[WalletProvider] Disconnect error:', error);
+    } finally {
+      // Reset flag after disconnect completes
+      setIsDisconnecting(false);
+    }
   };
 
   return (
