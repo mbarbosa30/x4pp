@@ -19,14 +19,14 @@ export function ConnectButton() {
     }
   }, [isConnected, address, currentUser, login]);
 
-  // Reset flag when wallet actually disconnects
-  useEffect(() => {
-    if (!isConnected) {
-      hasManuallyDisconnected.current = false;
-    }
-  }, [isConnected]);
+  const handleConnect = async () => {
+    // Reset flag when user manually clicks connect
+    hasManuallyDisconnected.current = false;
+    await connect();
+  };
 
   const handleDisconnect = async () => {
+    console.log('[ConnectButton] User clicked disconnect');
     hasManuallyDisconnected.current = true;
     await disconnect();
     setLocation('/');
@@ -54,7 +54,7 @@ export function ConnectButton() {
     <Button 
       variant="outline" 
       data-testid="button-connect"
-      onClick={() => connect()}
+      onClick={handleConnect}
     >
       <Wallet className="h-4 w-4 mr-2" />
       Connect
