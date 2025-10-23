@@ -83,7 +83,7 @@ export async function signTransferAuthorization(
     }
 
     // Use wagmi's signTypedData which works with any wallet provider (MetaMask, WalletConnect, etc.)
-    const signature = await signTypedData(wagmiAdapter.wagmiConfig, {
+  const signature = await signTypedData(wagmiAdapter.wagmiConfig, {
       account: account.address as `0x${string}`,
       domain,
       types,
