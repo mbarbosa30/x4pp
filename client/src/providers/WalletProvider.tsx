@@ -117,6 +117,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const handleConnect = async () => {
     try {
       setIsConnecting(true);
+      // Clear the disconnect flag when user explicitly tries to connect
+      isIntentionalDisconnect.current = false;
       // Open Reown AppKit modal for wallet connection
       await modal.open();
     } catch (error) {
