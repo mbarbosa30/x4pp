@@ -106,7 +106,7 @@ export default function Landing() {
           </h1>
           
           <p className="text-lg sm:text-xl text-muted-foreground max-w-2xl mx-auto">
-            Set your price. Senders bid in USDC. You decide which messages are worth your time.
+            Your inbox isn't free real estate. Pay to message, Get paid to read. Less noise, More signal.
           </p>
           
           <div className="flex items-center justify-center gap-2 text-xs sm:text-sm text-muted-foreground">
