@@ -1,24 +1,20 @@
-import { useState } from "react";
 import { useRoute } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Mail, DollarSign, Send, Loader2 } from "lucide-react";
+import { Mail, DollarSign, Loader2 } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
-import { useAccount } from "wagmi";
-import { useToast } from "@/hooks/use-toast";
+import ComposeMessage from "@/components/ComposeMessage";
 import { PLATFORM_DEFAULT_MIN_BID } from "@shared/constants";
 
 type ProfileData = {
   username: string | null;
   walletAddress: string;
+  displayName?: string;
   minBasePrice: string;
   isPublic: boolean;
+  isRegistered?: boolean;
 };
 
 export default function PublicMessage() {
@@ -27,13 +23,6 @@ export default function PublicMessage() {
   
   // Identifier can come from either route
   const identifier = usernameParams?.identifier || (addressParams?.address ? `0x${addressParams.address}` : "");
-  const { address } = useAccount();
-  const { toast } = useToast();
-  
-  const [senderName, setSenderName] = useState("");
-  const [senderEmail, setSenderEmail] = useState("");
-  const [message, setMessage] = useState("");
-  const [bidAmount, setBidAmount] = useState("");
 
   // Fetch profile data
   const { data: profile, isLoading } = useQuery<ProfileData>({
@@ -43,43 +32,8 @@ export default function PublicMessage() {
 
   const isWalletAddress = identifier.startsWith('0x') && identifier.length === 42;
   const minBid = profile ? parseFloat(profile.minBasePrice) : (isWalletAddress ? PLATFORM_DEFAULT_MIN_BID : 0.05);
-  const displayName = profile?.username || (isWalletAddress ? `${identifier.slice(0, 6)}...${identifier.slice(-4)}` : identifier);
-
-  const handleSend = async () => {
-    if (!senderName || !message) {
-      toast({
-        title: "Missing information",
-        description: "Please fill in your name and message",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (!address) {
-      toast({
-        title: "Wallet not connected",
-        description: "Please connect your wallet to send a message",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const bid = bidAmount ? parseFloat(bidAmount) : minBid;
-    if (isNaN(bid) || bid < minBid) {
-      toast({
-        title: "Invalid bid",
-        description: `Bid must be at least $${minBid.toFixed(2)}`,
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // TODO: Implement actual message sending with payment
-    toast({
-      title: "Feature in progress",
-      description: "Message sending will be implemented soon",
-    });
-  };
+  const displayName = profile?.displayName || profile?.username || (isWalletAddress ? `${identifier.slice(0, 6)}...${identifier.slice(-4)}` : identifier);
+  const isRegistered = profile?.isRegistered !== false;
 
   if (isLoading) {
     return (
@@ -119,7 +73,7 @@ export default function PublicMessage() {
               {profile?.username && (
                 <p className="text-muted-foreground">@{profile.username}</p>
               )}
-              {!profile && isWalletAddress && (
+              {!isRegistered && isWalletAddress && (
                 <Badge variant="outline" className="mt-2">Unregistered Wallet</Badge>
               )}
             </div>
@@ -142,94 +96,26 @@ export default function PublicMessage() {
                 <span className="text-muted-foreground">USDC</span>
               </div>
               <div className="text-xs text-muted-foreground pt-2 border-t">
-                Set your bid amount to increase your chances of acceptance
+                {!isRegistered 
+                  ? "Platform default minimum bid for unregistered wallets"
+                  : "Set your bid amount to increase your chances of acceptance"
+                }
               </div>
             </div>
           </Card>
 
-          {/* Message Form */}
-          <Card className="p-6">
-            <div className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="name">Your name</Label>
-                  <Input
-                    id="name"
-                    placeholder="John Doe"
-                    value={senderName}
-                    onChange={(e) => setSenderName(e.target.value)}
-                    className="mt-2"
-                    data-testid="input-sender-name"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="email">Email (optional)</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="john@example.com"
-                    value={senderEmail}
-                    onChange={(e) => setSenderEmail(e.target.value)}
-                    className="mt-2"
-                    data-testid="input-sender-email"
-                  />
-                </div>
-              </div>
+          {/* Message Composition Form */}
+          <ComposeMessage 
+            isVerified={false}
+            initialRecipient={identifier}
+          />
 
-              <div>
-                <Label htmlFor="bid">Your bid (USDC)</Label>
-                <Input
-                  id="bid"
-                  type="number"
-                  lang="en-US"
-                  step="0.01"
-                  min={minBid}
-                  placeholder={`Minimum ${minBid.toFixed(2)}`}
-                  value={bidAmount}
-                  onChange={(e) => setBidAmount(e.target.value)}
-                  className="mt-2"
-                  data-testid="input-bid-amount"
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Minimum: ${minBid.toFixed(2)} USDC
-                </p>
-              </div>
-
-              <div>
-                <Label htmlFor="message">Your message</Label>
-                <Textarea
-                  id="message"
-                  placeholder="What would you like to say?"
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                  className="mt-2 min-h-40"
-                  data-testid="input-message"
-                />
-                <div className="flex justify-end mt-2">
-                  <span className="text-xs text-muted-foreground">
-                    {message.length} characters
-                  </span>
-                </div>
-              </div>
-
-              <Button 
-                onClick={handleSend} 
-                className="w-full"
-                size="lg"
-                disabled={!address}
-                data-testid="button-send-message"
-              >
-                <Send className="h-4 w-4 mr-2" />
-                {address ? "Send Message" : "Connect Wallet to Send"}
-              </Button>
-
-              <div className="text-center text-xs text-muted-foreground space-y-1">
-                <p>✓ Funds stay in your wallet until recipient accepts</p>
-                <p>✓ Automatic refund if message expires</p>
-                <p>✓ All payments in USDC on Celo</p>
-              </div>
-            </div>
-          </Card>
+          {/* Info Footer */}
+          <div className="text-center text-xs text-muted-foreground space-y-1 pb-8">
+            <p>✓ Funds stay in your wallet until recipient accepts</p>
+            <p>✓ Automatic refund if message expires</p>
+            <p>✓ All payments in USDC on Celo</p>
+          </div>
         </div>
       </main>
     </div>
