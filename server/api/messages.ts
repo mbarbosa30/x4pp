@@ -60,7 +60,16 @@ router.get("/pending", async (req, res) => {
       )
       .orderBy(desc(messages.bidUsd));
 
-    res.json(pendingMessages);
+    // Serialize timestamps to ISO strings for proper frontend handling
+    const serializedMessages = pendingMessages.map(msg => ({
+      ...msg,
+      sentAt: msg.sentAt ? msg.sentAt.toISOString() : null,
+      expiresAt: msg.expiresAt ? msg.expiresAt.toISOString() : null,
+      openedAt: msg.openedAt?.toISOString() || null,
+      repliedAt: msg.repliedAt?.toISOString() || null,
+    }));
+
+    res.json(serializedMessages);
   } catch (error) {
     console.error("Error fetching pending messages:", error);
     res.status(500).json({ error: "Failed to fetch pending messages" });

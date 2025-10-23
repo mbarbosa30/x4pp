@@ -2,6 +2,8 @@
 // Used for gasless USDC transfers on Celo
 
 import { keccak256, toHex } from 'viem';
+import { signTypedData, getAccount } from '@wagmi/core';
+import { wagmiConfig } from './reown-config';
 
 export interface TransferWithAuthorizationParams {
   from: string;
@@ -73,33 +75,22 @@ export async function signTransferAuthorization(
   console.log('[EIP-712 Signing] Types:', types);
 
   try {
-    // Use ethereum provider to sign typed data
-    if (!window.ethereum) {
-      throw new Error('No ethereum provider found');
+    // Get the active account from wagmi
+    const account = getAccount(wagmiConfig);
+    if (!account.address) {
+      throw new Error('No wallet connected');
     }
 
-    const signature = await window.ethereum.request({
-      method: 'eth_signTypedData_v4',
-      params: [
-        signerAddress,
-        JSON.stringify({
-          types: {
-            EIP712Domain: [
-              { name: 'name', type: 'string' },
-              { name: 'version', type: 'string' },
-              { name: 'chainId', type: 'uint256' },
-              { name: 'verifyingContract', type: 'address' },
-            ],
-            ...types,
-          },
-          primaryType: 'TransferWithAuthorization',
-          domain,
-          message,
-        }),
-      ],
+    // Use wagmi's signTypedData which works with any wallet provider (MetaMask, WalletConnect, etc.)
+    const signature = await signTypedData(wagmiConfig, {
+      account: account.address as `0x${string}`,
+      domain,
+      types,
+      primaryType: 'TransferWithAuthorization',
+      message,
     });
 
-    return signature as string;
+    return signature;
   } catch (error) {
     console.error('Error signing transfer authorization:', error);
     throw error;
@@ -117,15 +108,4 @@ export function parseSignature(signature: string): PaymentAuthSignature {
   const v = parseInt(sig.slice(128, 130), 16);
 
   return { v, r, s };
-}
-
-// Extend Window interface for ethereum provider
-declare global {
-  interface Window {
-    ethereum?: {
-      request: (args: { method: string; params?: any[] }) => Promise<any>;
-      on: (event: string, callback: (...args: any[]) => void) => void;
-      removeListener: (event: string, callback: (...args: any[]) => void) => void;
-    };
-  }
 }
