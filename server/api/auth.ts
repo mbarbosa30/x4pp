@@ -49,9 +49,14 @@ router.post("/login", async (req, res) => {
   try {
     const { username, walletAddress } = req.body;
 
+    console.log("[Login] Received login request:", { username, walletAddress });
+
     if (!username && !walletAddress) {
       return res.status(400).json({ error: "Username or wallet address is required" });
     }
+
+    const lookupValue = username || walletAddress?.toLowerCase();
+    console.log("[Login] Looking up user by:", username ? `username: ${username}` : `wallet: ${lookupValue}`);
 
     const [user] = await db
       .select({
@@ -65,13 +70,16 @@ router.post("/login", async (req, res) => {
       .where(
         username 
           ? eq(users.username, username)
-          : eq(users.walletAddress, walletAddress.toLowerCase())
+          : eq(users.walletAddress, lookupValue)
       )
       .limit(1);
 
     if (!user) {
+      console.log("[Login] User not found for:", lookupValue);
       return res.status(404).json({ error: "User not found" });
     }
+
+    console.log("[Login] User found:", user.username);
 
     // Set session
     req.session.userId = user.id;
