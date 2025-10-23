@@ -85,7 +85,8 @@ export async function processExpiredMessages(): Promise<RefundResult[]> {
   }
 }
 
-// Execute a refund with real on-chain USDC transfer on Celo
+// Mark expired authorization as unused (EIP-3009 deferred payment model)
+// In this model, funds never left sender's wallet, so no on-chain refund needed
 async function executeRefund(
   messageId: string,
   payment: any,
@@ -97,32 +98,22 @@ async function executeRefund(
       return false;
     }
 
-    // Import Celo payment service for refunds
-    const { executeRefund: executeOnChainRefund } = await import("../celo-payment");
-
-    // Execute on-chain USDC refund
-    const refundAmount = parseFloat(payment.amount);
-    const result = await executeOnChainRefund(payment.sender as `0x${string}`, refundAmount);
-
-    if (!result.success) {
-      console.error(`On-chain refund failed for message ${messageId}:`, result.error);
-      return false;
-    }
-
-    // Update payment status with transaction hash
+    // In EIP-3009 deferred settlement model:
+    // - Funds never left sender's wallet (authorization not executed)
+    // - Simply mark authorization as "unused" - no on-chain transaction needed
+    // - This is gas-free and instant
+    
     await db
       .update(payments)
       .set({
-        status: "refunded",
-        refundTxHash: result.txHash,
+        status: "unused", // Authorization was never executed
       })
       .where(eq(payments.id, payment.id));
 
-    console.log(`Refund executed for message ${messageId}: ${payment.amount} USDC to ${payment.sender}`);
-    console.log(`Transaction hash: ${result.txHash}`);
+    console.log(`Authorization marked unused for message ${messageId}: ${payment.amount} USDC (funds never left sender wallet)`);
     return true;
   } catch (error) {
-    console.error(`Refund execution error for message ${messageId}:`, error);
+    console.error(`Error marking authorization unused for message ${messageId}:`, error);
     return false;
   }
 }
