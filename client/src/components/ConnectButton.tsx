@@ -1,10 +1,18 @@
 import { useAppKitAccount, useAppKit } from '@reown/appkit/react';
 import { Button } from '@/components/ui/button';
 import { Wallet } from 'lucide-react';
+import { disconnectWallet } from '@/providers/WalletProvider';
+import { useLocation } from 'wouter';
 
 export function ConnectButton() {
   const { isConnected, address } = useAppKitAccount();
   const { open } = useAppKit();
+  const [, setLocation] = useLocation();
+
+  const handleDisconnect = async () => {
+    await disconnectWallet();
+    setLocation('/');
+  };
 
   if (isConnected && address) {
     return (
@@ -16,7 +24,7 @@ export function ConnectButton() {
           variant="outline" 
           size="sm"
           data-testid="button-disconnect"
-          onClick={() => open()}
+          onClick={handleDisconnect}
         >
           Disconnect
         </Button>
