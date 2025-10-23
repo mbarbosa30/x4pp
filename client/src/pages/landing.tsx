@@ -70,6 +70,10 @@ export default function Landing() {
       {/* Hero Section */}
       <section className="container mx-auto px-4 py-20 md:py-32">
         <div className="max-w-4xl mx-auto text-center space-y-6">
+          <Badge variant="outline" className="text-xs sm:text-sm">
+            P2P Messaging Attention Market
+          </Badge>
+          
           <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight">
             Get paid for your attention
           </h1>
@@ -77,6 +81,11 @@ export default function Landing() {
           <p className="text-lg sm:text-xl text-muted-foreground max-w-2xl mx-auto">
             Set your price. Senders bid in USDC. You decide which messages are worth your time.
           </p>
+          
+          <div className="flex items-center justify-center gap-2 text-xs sm:text-sm text-muted-foreground">
+            <Shield className="h-3 w-3 sm:h-4 sm:w-4" />
+            <span>EIP-3009 deferred authorization • Powered by x402</span>
+          </div>
           
           {isConnected ? (
             <div className="flex flex-col items-center justify-center gap-3 pt-4">
