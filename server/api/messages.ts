@@ -49,8 +49,8 @@ router.get("/sent", async (req, res) => {
         recipientUsername: users.username,
       })
       .from(messages)
-      .leftJoin(users, sql`lower(${users.walletAddress}) = ${messages.recipientWallet}`)
-      .where(eq(messages.senderWallet, user.walletAddress.toLowerCase()))
+      .leftJoin(users, sql`lower(${users.walletAddress}) = lower(${messages.recipientWallet})`)
+      .where(sql`lower(${messages.senderWallet}) = ${user.walletAddress.toLowerCase()}`)
       .orderBy(desc(messages.sentAt));
 
     // Serialize timestamps to ISO strings for proper frontend handling

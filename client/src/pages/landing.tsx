@@ -30,6 +30,13 @@ export default function Landing() {
     enabled: isConnected,
   });
 
+  // Check if connected wallet is registered
+  const { data: userByWallet, isLoading: isCheckingWallet } = useQuery({
+    queryKey: ['/api/users/wallet', address],
+    enabled: isConnected && !!address,
+    retry: false,
+  });
+
   useEffect(() => {
     if (isConnected && currentUser) {
       setLocation('/app');
@@ -39,6 +46,16 @@ export default function Landing() {
   const handleGoToDashboard = async () => {
     if (!isConnected || !address) return;
     
+    // Wait for wallet check to complete
+    if (isCheckingWallet) return;
+    
+    // Check if wallet is registered
+    if (!userByWallet) {
+      // Not registered - redirect to registration
+      setLocation('/register');
+      return;
+    }
+    
     setIsLoggingIn(true);
     try {
       await login();
@@ -47,6 +64,8 @@ export default function Landing() {
       }, 500);
     } catch (error) {
       console.error('Login failed:', error);
+      // If login fails, redirect to register
+      setLocation('/register');
       setIsLoggingIn(false);
     }
   };
@@ -93,9 +112,9 @@ export default function Landing() {
                 size="lg" 
                 data-testid="button-go-to-dashboard"
                 onClick={handleGoToDashboard}
-                disabled={isLoggingIn}
+                disabled={isLoggingIn || isCheckingWallet}
               >
-                {isLoggingIn ? 'Loading...' : 'Open Your Inbox'}
+                {isCheckingWallet ? 'Checking...' : isLoggingIn ? 'Loading...' : 'Open Your Inbox'}
                 <ArrowRight className="h-4 w-4 ml-2" />
               </Button>
               <p className="text-sm text-muted-foreground">

@@ -6,6 +6,39 @@ import { z } from "zod";
 
 const router = Router();
 
+// Check if wallet is registered
+router.get("/wallet/:address", async (req, res) => {
+  try {
+    const { address } = req.params;
+    
+    if (!address || !/^0x[a-fA-F0-9]{40}$/.test(address)) {
+      return res.status(400).json({ error: "Invalid wallet address" });
+    }
+
+    const normalizedAddress = address.toLowerCase();
+    
+    const [user] = await db
+      .select({
+        id: users.id,
+        username: users.username,
+        displayName: users.displayName,
+        walletAddress: users.walletAddress,
+      })
+      .from(users)
+      .where(eq(users.walletAddress, normalizedAddress))
+      .limit(1);
+
+    if (!user) {
+      return res.status(404).json({ error: "Wallet not registered" });
+    }
+
+    res.json(user);
+  } catch (error) {
+    console.error("Error checking wallet:", error);
+    res.status(500).json({ error: "Failed to check wallet" });
+  }
+});
+
 // Registration endpoint
 router.post("/", async (req, res) => {
   try {
