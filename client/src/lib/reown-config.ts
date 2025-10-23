@@ -23,7 +23,7 @@ export const celoChain = {
 
 export const metadata = {
   name: 'x4pp',
-  description: 'P2P Attention Market - Get paid to read messages',
+  description: 'Your inbox isn\'t free real estate. Pay to message, get paid to read.',
   url: typeof window !== 'undefined' ? window.location.origin : 'https://x4pp.app',
   icons: ['https://x4pp.app/favicon.ico'],
 };
