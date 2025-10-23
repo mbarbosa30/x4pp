@@ -75,7 +75,7 @@ export default function Landing() {
           </h1>
           
           <p className="text-lg sm:text-xl text-muted-foreground max-w-2xl mx-auto">
-            x4pp is a peer-to-peer messaging attention market. Anyone can send you a DM by placing a bid in USDC on Celo. Funds only move if you open before the deadline.
+            Set your price. Senders bid in USDC. You decide which messages are worth your time.
           </p>
           
           {isConnected ? (
