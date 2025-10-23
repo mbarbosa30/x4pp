@@ -101,33 +101,17 @@ function WalletProviderInner({ children }: { children: ReactNode }) {
   };
 
   const handleDisconnect = async () => {
-    try {
-      console.log('[WalletProvider] DISCONNECT: Starting...');
-      setIsDisconnecting(true);
-      
-      // Disconnect wallet FIRST
-      console.log('[WalletProvider] Disconnecting wallet...');
-      await wagmiDisconnectAsync();
-      
-      // Clear backend session
-      console.log('[WalletProvider] Clearing backend session...');
-      await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
-      
-      // Clear query cache
-      queryClient.setQueryData(['/api/auth/me'], null);
-      queryClient.clear();
-      
-      console.log('[WalletProvider] DISCONNECT: Complete');
-      setLocation('/');
-    } catch (error) {
-      console.error('[WalletProvider] Disconnect error:', error);
-    } finally {
-      // Keep flag set longer to prevent reconnection
-      setTimeout(() => {
-        console.log('[WalletProvider] Resetting disconnect flag');
-        setIsDisconnecting(false);
-      }, 2000);
-    }
+    console.log('[WalletProvider] Logging out (wallet stays connected)...');
+    
+    // Clear backend session
+    await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
+    
+    // Clear query cache
+    queryClient.setQueryData(['/api/auth/me'], null);
+    queryClient.clear();
+    
+    console.log('[WalletProvider] Logout complete');
+    setLocation('/');
   };
 
   return (
