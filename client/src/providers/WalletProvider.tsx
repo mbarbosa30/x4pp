@@ -100,6 +100,8 @@ function WalletProviderInner({ children }: { children: ReactNode }) {
   const handleConnect = async () => {
     try {
       setIsConnecting(true);
+      console.log('[WalletProvider] Opening modal...');
+      console.log('[WalletProvider] Available connectors:', wagmiAdapter.wagmiConfig.connectors.map(c => ({ id: c.id, name: c.name })));
       // Open the Reown AppKit modal
       modal.open();
     } catch (error) {
