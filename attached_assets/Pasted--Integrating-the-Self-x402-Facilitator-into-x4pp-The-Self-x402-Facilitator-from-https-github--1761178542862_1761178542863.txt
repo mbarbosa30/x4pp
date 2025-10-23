@@ -1,0 +1,178 @@
+### Integrating the Self-x402 Facilitator into x4pp
+
+The Self-x402 Facilitator (from https://github.com/JulioMCruz/Self-x402/tree/main/Selfx402Facilitator) is a lightweight Node.js/TypeScript service designed for handling x402-style micropayments on Celo: it verifies EIP-712 signatures, stores authorizations, and executes USDC `transferWithAuthorization` (EIP-3009) via a relayer account. It's built for deferred/conditional settlements (e.g., after verification), making it ideal for x4pp's time-bound flow: sign auth upfront, store it offchain, execute only if the receiver opens/accepts before `validBefore`, and auto-expire otherwise (no onchain action needed—funds stay with sender).
+
+Key strengths for integration:
+- **Modular PaymentService**: Handles sig verification, nonce management, and Celo relaying—reduces x4pp's custom code and revert risks.
+- **Celo-Optimized**: Uses low-gas relayer for executions (~$0.01/tx), with env-based RPC/private key.
+- **Adaptable for Conditionals**: Original logic executes post-verification; we'll tweak for deadline checks before calling the contract.
+- **Dependencies**: Viem/Ethers.js, PostgreSQL (for auth storage), aligns with x4pp's stack (Express, Drizzle, Neon).
+
+Integration keeps x4pp's P2P bidding intact: frontend signs as-is, backend routes call the Facilitator as a service. Below is a step-by-step guide (2-4 hours effort), with code adaptations. Assume x4pp backend is Express/TS; run Facilitator as a separate service (PORT=3005) or inline it.
+
+#### Step 1: Setup and Copy Facilitator (15-30 min)
+- **Clone/Fork**: `git clone https://github.com/JulioMCruz/Self-x402.git` (or fork), then copy `Selfx402Facilitator/` to x4pp's `/services/facilitator/`.
+- **Install**: In x4pp root: `yarn add viem @types/node dotenv` (if missing; Facilitator uses tsx for dev).
+- **Env Sync**: Add to x4pp `.env` (from Facilitator's setup):
+  ```
+  CELO_MAINNET_RPC_URL=https://forno.celo.org
+  CELO_MAINNET_PRIVATE_KEY=0xYourRelayerPrivateKeyHere  # Backend gas payer (not user wallet)
+  USDC_ADDRESS=0xcebA9300f2b948710d2653dD7B07f33A8B32118C
+  FACILITATOR_PORT=3005  # If running separate
+  ```
+- **DB Prep**: In x4pp Drizzle schema (`schema.ts`), extend `messages`:
+  ```typescript
+  export const messages = pgTable('messages', {
+    // ... existing
+    validAfter: bigint('valid_after'),
+    validBefore: bigint('valid_before'),
+    authorization: json('authorization').$type<{ v: number; r: `0x${string}`; s: `0x${string}`; nonce: `0x${string}` }>(),
+  });
+  ```
+
+#### Step 2: Adapt PaymentService for Conditional Executions (45-60 min)
+The original `PaymentService.ts` (in Facilitator) focuses on immediate verification/settlement post-x402 request. We'll extend it with:
+- **StoreAuth**: Verify sig, store in DB (no tx yet).
+- **ExecuteIfValid**: Check deadline, then transfer.
+
+Updated `services/facilitator/PaymentService.ts` (merge with original; assumes Viem client):
+```typescript
+import { createPublicClient, http, parseUnits } from 'viem';
+import { celo } from 'viem/chains';
+import { recoverTypedDataAddress } from 'viem/accounts';
+import { db } from '../../db';  // x4pp Drizzle
+import { eq } from 'drizzle-orm';
+import * as dotenv from 'dotenv';
+dotenv.config();
+
+const USDC_ADDRESS = process.env.USDC_ADDRESS as `0x${string}`;
+const RELAYER_PK = process.env.CELO_MAINNET_PRIVATE_KEY as `0x${string}`;
+
+const client = createPublicClient({
+  chain: celo,
+  transport: http(process.env.CELO_MAINNET_RPC_URL),
+});
+
+const USDC_ABI = [
+  'function transferWithAuthorization(address from, address to, uint256 value, uint256 validAfter, uint256 validBefore, bytes32 nonce, uint8 v, bytes32 r, bytes32 s) external returns (bool)'
+] as const;
+
+export class PaymentService {
+  // Original verify logic (adapted for storage)
+  async verifyAndStoreAuth(
+    from: `0x${string}`,
+    to: `0x${string}`,
+    valueStr: string,  // e.g., '500000' (0.50 USDC, 6 decimals)
+    validAfter: string,
+    validBefore: string,
+    nonce: `0x${string}`,
+    v: 27 | 28,
+    r: `0x${string}`,
+    s: `0x${string}`,
+    messageId: string,
+    content: string
+  ) {
+    const value = parseUnits(valueStr, 6).toString();  // Ensure uint256 string
+
+    // Reconstruct EIP-712 (Circle USDC standard)
+    const typedData = {
+      domain: { name: 'USD Coin', version: '2', chainId: 42220n, verifyingContract: USDC_ADDRESS },
+      types: { TransferWithAuthorization: [
+        { name: 'from', type: 'address' }, { name: 'to', type: 'address' },
+        { name: 'value', type: 'uint256' }, { name: 'validAfter', type: 'uint256' },
+        { name: 'validBefore', type: 'uint256' }, { name: 'nonce', type: 'bytes32' }
+      ]},
+      primaryType: 'TransferWithAuthorization',
+      message: { from, to, value, validAfter, validBefore, nonce }
+    } as const;
+
+    // Verify sig (from original Facilitator)
+    const sigHex = `0x${r.slice(2)}${s.slice(2)}${v === 27 ? '1b' : '1c'}`;
+    const recovered = await recoverTypedDataAddress({ ...typedData, signature: sigHex });
+    if (recovered.toLowerCase() !== from.toLowerCase()) throw new Error('Invalid signature');
+
+    // Store (conditional: no tx yet)
+    await db.insert(messages).values({
+      id: messageId, senderNullifier: from, recipientNullifier: to,
+      content, bidUsd: valueStr, status: 'pending',
+      validAfter: BigInt(validAfter), validBefore: BigInt(validBefore),
+      authorization: { v, r, s, nonce },
+      expiresAt: new Date(Number(validBefore) * 1000)
+    });
+
+    return { status: 'pending', messageId };
+  }
+
+  // New: Conditional execution (extend original settle)
+  async executeIfTimely(messageId: string) {
+    const msg = await db.select().from(messages).where(eq(messages.id, messageId));
+    if (!msg[0] || msg[0].status !== 'pending') throw new Error('Invalid state');
+
+    const { validBefore, authorization, from, to, value: valueStr, validAfter } = msg[0];
+    const now = Math.floor(Date.now() / 1000);
+    if (now > Number(validBefore)) {
+      await this.expireAuth(messageId);
+      throw new Error('Expired authorization');
+    }
+
+    // Execute (original Facilitator relayer logic)
+    const value = parseUnits(valueStr, 6);
+    const txHash = await client.writeContract({
+      address: USDC_ADDRESS,
+      abi: USDC_ABI,
+      functionName: 'transferWithAuthorization',
+      args: [from, to, value, BigInt(validAfter), BigInt(validBefore), authorization.nonce, authorization.v, authorization.r, authorization.s],
+      account: RELAYER_PK
+    });
+
+    await db.update(messages).set({ status: 'accepted', txHash }).where(eq(messages.id, messageId));
+    return txHash;
+  }
+
+  private async expireAuth(messageId: string) {
+    await db.update(messages).set({ status: 'expired' }).where(eq(messages.id, messageId));
+    // No tx—auth expires naturally
+  }
+}
+```
+
+#### Step 3: Wire into x4pp Routes and Run Facilitator (30-45 min)
+- **Routes** (in x4pp `routes/messages.ts` or similar):
+  ```typescript
+  import { PaymentService } from '../services/facilitator/PaymentService';
+
+  const paymentService = new PaymentService();
+
+  app.post('/api/commit', async (req, res) => {
+    const { content, bidUsd, toUsername, slaHours } = req.body;
+    const auth = JSON.parse(req.headers['x-payment'] as string);  // {from, to, value: bidUsd, validAfter, validBefore, v,r,s,nonce}
+    const validBefore = (Date.now() / 1000 + slaHours * 3600).toString();
+    // ... set auth.validBefore if not passed
+
+    try {
+      const messageId = crypto.randomUUID();
+      await paymentService.verifyAndStoreAuth(auth.from, auth.to, bidUsd, '0', validBefore, auth.nonce, auth.v, auth.r, auth.s, messageId, content);
+      res.json({ status: 'pending', messageId });
+    } catch (err) {
+      res.status(402).json({ error: (err as Error).message });
+    }
+  });
+
+  app.post('/api/messages/:id/accept', async (req, res) => {
+    try {
+      const txHash = await paymentService.executeIfTimely(req.params.id);
+      res.json({ status: 'accepted', txHash });
+    } catch (err) {
+      res.status(400).json({ error: (err as Error).message });
+    }
+  });
+  ```
+- **Run**: If separate: `cd services/facilitator && PORT=3005 npx tsx index.ts` (adapt original index.ts to export service). Or inline in x4pp server.
+- **Expiry Worker**: In x4pp cron (every 5 min): Query pending expired, call `expireAuth`.
+
+#### Step 4: Test and Deploy (30 min)
+- **Test**: Alfajores testnet (faucet USDC). Send message, accept before/after deadline—check tx only on timely accept (via celoscan.io).
+- **Edge**: Invalid sig → 402; expired → no tx, status='expired'.
+- **Deploy**: Vercel (backend + inline Facilitator); monitor tx via logs/explorer.
+
+This makes x4pp's deadlines enforceable onchain via Facilitator's robust relayer, without changing frontend. For PR back to Self-x402, add as "deferred mode" flag. If repo access issues (e.g., private), use the code above as starter. Questions?

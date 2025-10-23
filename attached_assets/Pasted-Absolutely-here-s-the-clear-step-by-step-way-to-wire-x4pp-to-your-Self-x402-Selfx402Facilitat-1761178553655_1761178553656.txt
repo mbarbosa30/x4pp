@@ -1,0 +1,276 @@
+Absolutely—here’s the **clear, step-by-step** way to wire x4pp to your **Self-x402/Selfx402Facilitator** using **deferred EIP-3009** on **Celo USDC** (domain **`name: "USDC"`**). The flow is: sender signs once → your app stores the authorization → only if the receiver opens before the deadline do you settle on-chain.
+
+---
+
+# 0) What you’re building (one glance)
+
+* **Deferred voucher**: the sender signs an **EIP-712** message for `TransferWithAuthorization` (EIP-3009). No funds move yet.
+* Your server (or the facilitator) **verifies & stores** that exact payload.
+* When the receiver taps **Open**, you **replay the exact payload** into `transferWithAuthorization(...)` on Celo USDC.
+* If **declined/expired**, do nothing on-chain. The authorization simply becomes unusable after `validBefore`.
+
+---
+
+# 1) Prereqs & config
+
+In **Selfx402Facilitator** (and your app env):
+
+```
+CHAIN_ID=42220
+RPC_URL=https://forno.celo.org
+USDC_ADDRESS=0xcebA9300f2b948710d2653dD7B07f33A8B32118C
+EIP712_NAME=USDC
+EIP712_VERSION=2
+X4PP_FACILITATOR_TOKEN=<shared secret>   # to protect facilitator endpoints
+```
+
+USDC uses **6 decimals** → store “microunits” (e.g., 0.50 USDC = `500000`).
+
+---
+
+# 2) Frontend: compose → get a 402 → sign typed data
+
+When the sender presses **Send**:
+
+**A) Your server responds 402 (Payment Required) with the typed-data to sign**
+
+```json
+{
+  "scheme": "deferred",
+  "token": "USDC",
+  "chainId": 42220,
+  "verifyingContract": "0xcebA9300f2b948710d2653dD7B07f33A8B32118C",
+  "typedDataDomain": {
+    "name": "USDC",
+    "version": "2",
+    "chainId": 42220,
+    "verifyingContract": "0xcebA9300f2b948710d2653dD7B07f33A8B32118C"
+  },
+  "typedDataTypes": {
+    "TransferWithAuthorization": [
+      {"name":"from","type":"address"},
+      {"name":"to","type":"address"},
+      {"name":"value","type":"uint256"},
+      {"name":"validAfter","type":"uint256"},
+      {"name":"validBefore","type":"uint256"},
+      {"name":"nonce","type":"bytes32"}
+    ]
+  },
+  "typedDataMessage": {
+    "from": "0xSENDER",
+    "to":   "0xRECIPIENT",
+    "value": "500000",
+    "validAfter":  0,
+    "validBefore": 1737580800,
+    "nonce": "0x<32-byte-hex>"
+  }
+}
+```
+
+**B) The wallet signs the EIP-712 message (wagmi/viem)**
+
+```ts
+const signature = await walletClient.signTypedData({
+  account: from,
+  domain: { name:'USDC', version:'2', chainId:42220, verifyingContract: USDC },
+  types:  { TransferWithAuthorization: [
+    {name:'from',type:'address'},{name:'to',type:'address'},{name:'value',type:'uint256'},
+    {name:'validAfter',type:'uint256'},{name:'validBefore',type:'uint256'},{name:'nonce',type:'bytes32'},
+  ]},
+  primaryType: 'TransferWithAuthorization',
+  message: { from, to, value, validAfter, validBefore, nonce }
+})
+```
+
+**C) Client retries the same `/commit` with `X-PAYMENT` header**
+Include `{ from,to,value,validAfter,validBefore,nonce, v,r,s }`.
+
+---
+
+# 3) Your server: verify & store (no chain call yet)
+
+On the **second** `/commit`:
+
+1. **Bind & validate**
+
+   * `from` must equal the logged-in wallet.
+   * `to` must equal the **recipient wallet in your DB** (prevents target swapping).
+   * `bid ≥ min_base_price` (your pricing rule).
+   * `validAfter ≤ now < validBefore`.
+   * Convert `value` to **BigInt microunits** and check range.
+
+2. **Ask the facilitator to verify & store the voucher**
+   Call your Selfx402Facilitator:
+
+   ```
+   POST /deferred/verify   (Authorization: Bearer <X4PP_FACILITATOR_TOKEN>)
+   body: {
+     scheme:"deferred", token:"USDC", chainId:42220,
+     eip712:{ domain, primaryType:"TransferWithAuthorization", message, signature },
+     metadata:{ messageId }
+   }
+   ```
+
+   Facilitator responsibilities:
+
+   * Recover signer from `signature` and assert `signer == message.from`.
+   * Assert domain equals `{name:"USDC", version:"2", chainId:42220, verifyingContract: USDC_ADDRESS}`.
+   * Check time window; optionally query `authorizationState(from, nonce)` is *Unused*.
+   * **Persist the exact tuple** `(from,to,value,validAfter,validBefore,nonce,v,r,s)` with status `authorized`.
+   * Return `{ ok:true, authorizationId }` (idempotent on `(from,nonce)`).
+
+3. **Persist your app rows**
+
+   * `messages`: `pending`, `expires_at = validBefore`.
+   * `payments`: `authorized`, link `authorizationId` (or store the full payload if you prefer app-side storage).
+   * Respond `200 { messageId, status:'pending', expiresAt }`.
+
+> If you want facilitator **stateless**, you can skip (2) and store the payload in your DB after locally verifying the signature; later, call facilitator `/deferred/settle` with the **full payload**. Both modes work.
+
+---
+
+# 4) Receiver taps “Open” → settle on-chain
+
+When the receiver opens/accepts the message:
+
+1. **Row-lock** the message (avoid double accepts).
+
+2. **Call facilitator to settle**
+
+   ```
+   POST /deferred/settle   (Authorization: Bearer <token>)
+   body: { authorizationId }   // or full payload if facilitator is stateless
+   ```
+
+   Facilitator:
+
+   * Loads the stored tuple (or uses provided fields).
+   * (Optional) re-check `authorizationState(from,nonce) == Unused`.
+   * Calls **Celo USDC**:
+
+     ```
+     transferWithAuthorization(
+       from, to, value, validAfter, validBefore, nonce, v, r, s
+     )
+     ```
+   * On success: return `{ ok:true, txHash }`.
+
+3. **Update your DB**
+
+   * `payments.status='settled'`, `tx_hash = <hash>`.
+   * `messages.status='accepted'`, `accepted_at=now()`.
+
+---
+
+# 5) Decline or expiry → mark unused (no chain call)
+
+* **Decline**: immediately set `messages='declined'`, `payments='unused'`.
+* **Auto-expiry worker** (every 5 min):
+
+  * Find `pending AND expires_at < now` → set `messages='expired'`, `payments='unused'`.
+* No refund tx is needed, because funds never left the sender’s wallet.
+
+---
+
+# 6) Database essentials (Drizzle/Postgres)
+
+* `users(id, username unique, wallet_address unique, min_base_price_usd, sla_hours)`
+* `messages(id, sender_user_id, recipient_user_id, content_cipher, bid_usd, status, created_at, expires_at, accepted_at, declined_at)`
+
+  * **Partial unique**: one `pending` per `(sender_user_id, recipient_user_id)`.
+* `payments(id, message_id, authorization_id, from, to, amount_usdc, valid_after, valid_before, nonce, v, r, s, status, tx_hash)`
+
+  * **Unique**: `(from, nonce)` (extra replay guard).
+* `blocks(recipient_user_id, blocked_sender_user_id)` (optional now, useful later)
+
+---
+
+# 7) Security checklist (don’t skip)
+
+* **Domain must be exact** on Celo: `{ name:"USDC", version:"2", chainId:42220, verifyingContract: USDC_ADDRESS }`.
+* **Nonce is 32 bytes** (left-padded hex OK).
+* **USDC 6 decimals**: `value` in microunits (integer).
+* **Recipient binding**: refuse if `message.to` ≠ wallet you have on file for that username.
+* **Store every field** you will replay; do **not** reconstruct any at settle time.
+* **Validity window** must still be open at settle; if expired, the token will revert.
+* Protect facilitator endpoints with **Bearer token** (or HMAC/mTLS) and log minimally (no PII).
+
+---
+
+# 8) End-to-end test script (copy/paste for QA)
+
+1. **Happy path**
+
+   * Sender commits → 402 → signs → retry → `pending`.
+   * Receiver opens → facilitator settles → `messages.accepted`, `payments.settled (txHash)`.
+2. **Decline**
+
+   * Sender commits → `pending`.
+   * Receiver declines → `payments.unused`, `messages.declined`. No chain tx.
+3. **Expiry**
+
+   * Create pending with short `validBefore`.
+   * Worker marks `expired` + `unused`. No chain tx.
+4. **Double accept**
+
+   * Second accept attempt rejected via row lock or by USDC `authorizationState != Unused`.
+5. **Tamper guard**
+
+   * Change `to`/`value` server-side → settle must fail validation (or you reject before calling facilitator).
+
+---
+
+# 9) Minimal facilitator endpoints (OpenAPI-ish sketch)
+
+**POST `/deferred/verify`**
+
+* Auth: `Authorization: Bearer <token>`
+* Body:
+
+  ```json
+  {
+    "scheme":"deferred","token":"USDC","chainId":42220,
+    "eip712":{ "domain":{...}, "primaryType":"TransferWithAuthorization",
+               "message":{...}, "signature":"0x..." },
+    "metadata":{"messageId":"m_abc"}
+  }
+  ```
+* 200:
+
+  ```json
+  { "ok": true, "authorizationId": "auth_6f..." }
+  ```
+
+**POST `/deferred/settle`**
+
+* Auth: `Authorization: Bearer <token>`
+
+* Body (A: stored):
+
+  ```json
+  { "authorizationId": "auth_6f..." }
+  ```
+
+  *(or B: stateless full payload with an `idempotencyKey`)*
+
+* 200:
+
+  ```json
+  { "ok": true, "txHash": "0x..." }
+  ```
+
+---
+
+# 10) Why this matches Self-x402Facilitator cleanly
+
+* The repo already plays the **facilitator** role in x402 (verify → settle).
+* You’re just adding a **storage hop** between verify and settle so x4pp can enforce **“money moves only on Open”**.
+* It stays compatible with the direction of a **deferred scheme** (voucher now, redeem later), and your open-bidding UX doesn’t change.
+
+---
+
+If you want, I can draft ready-to-drop TypeScript handlers for:
+
+* your **Express** `/commit` (402 + retry), `/accept`, `/decline`, and
+* the facilitator’s **`/deferred/verify`** and **`/deferred/settle`** (using viem)
+  so you can run a live end-to-end on Celo right away.
