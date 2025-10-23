@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -31,12 +31,31 @@ interface PriceGuide {
 }
 
 export default function ComposeMessage({ isVerified, onSend, initialRecipient }: ComposeMessageProps) {
-  const [recipient, setRecipient] = useState(initialRecipient || "");
-  const [message, setMessage] = useState("");
-  const [bidAmount, setBidAmount] = useState(0.10);
-  const [replyBounty, setReplyBounty] = useState(0);
-  const [includeReplyBounty, setIncludeReplyBounty] = useState(false);
-  const [expirationHours, setExpirationHours] = useState(24); // Default: 24 hours
+  // Helper to safely restore from sessionStorage
+  const restorePendingPayment = () => {
+    try {
+      const stored = sessionStorage.getItem('pendingPayment');
+      return stored ? JSON.parse(stored) : null;
+    } catch (error) {
+      console.error('Failed to restore pending payment:', error);
+      // Try to clean up, but don't let cleanup failure break the flow
+      try {
+        sessionStorage.removeItem('pendingPayment');
+      } catch (cleanupError) {
+        // Ignore cleanup errors in private mode
+      }
+      return null;
+    }
+  };
+
+  const pendingPayment = restorePendingPayment();
+
+  const [recipient, setRecipient] = useState(pendingPayment?.formState?.recipient || initialRecipient || "");
+  const [message, setMessage] = useState(pendingPayment?.formState?.message || "");
+  const [bidAmount, setBidAmount] = useState(pendingPayment?.formState?.bidAmount || 0.10);
+  const [replyBounty, setReplyBounty] = useState(pendingPayment?.formState?.replyBounty || 0);
+  const [includeReplyBounty, setIncludeReplyBounty] = useState(pendingPayment?.formState?.includeReplyBounty || false);
+  const [expirationHours, setExpirationHours] = useState(pendingPayment?.formState?.expirationHours || 24);
   const { toast } = useToast();
   const { address: walletAddress, isConnected, connect } = useWallet();
   const { isAuthenticated } = useAuth();
@@ -44,11 +63,21 @@ export default function ComposeMessage({ isVerified, onSend, initialRecipient }:
   
   // x402 payment flow state
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [paymentRequirements, setPaymentRequirements] = useState<any>(null);
+  const [paymentRequirements, _setPaymentRequirements] = useState<any>(pendingPayment?.paymentRequirements || null);
   const [isPaying, setIsPaying] = useState(false);
-  const [originalCommitPayload, setOriginalCommitPayload] = useState<any>(null);
+  const [originalCommitPayload, setOriginalCommitPayload] = useState<any>(pendingPayment?.commitPayload || null);
   const [priceGuide, setPriceGuide] = useState<PriceGuide | null>(null);
   const [isLoadingPriceGuide, setIsLoadingPriceGuide] = useState(false);
+  const [hasShownResumeToast, setHasShownResumeToast] = useState(false);
+  
+  // Ref to track latest paymentRequirements value (not affected by closure)
+  const paymentRequirementsRef = useRef(paymentRequirements);
+  
+  // Custom setter that updates both state and ref synchronously
+  const setPaymentRequirements = (value: any) => {
+    paymentRequirementsRef.current = value;
+    _setPaymentRequirements(value);
+  };
 
   // Update recipient when initialRecipient prop changes (e.g., from URL params)
   useEffect(() => {
@@ -57,6 +86,19 @@ export default function ComposeMessage({ isVerified, onSend, initialRecipient }:
     }
   }, [initialRecipient]);
 
+  // Auto-trigger payment notification if there's a pending payment when wallet connects
+  useEffect(() => {
+    if (paymentRequirements && originalCommitPayload && isConnected && !hasShownResumeToast) {
+      // Show a toast to let user know we're resuming their payment
+      toast({
+        title: "Resuming Payment",
+        description: `Ready to sign authorization for $${bidAmount.toFixed(2)} USDC`,
+      });
+      // Only show this toast once
+      setHasShownResumeToast(true);
+    }
+  }, [isConnected, paymentRequirements, originalCommitPayload]);
+
   // Fetch price guide when recipient changes (only if wallet connected)
   useEffect(() => {
     if (!recipient || !isConnected) {
@@ -64,6 +106,13 @@ export default function ComposeMessage({ isVerified, onSend, initialRecipient }:
       return;
     }
 
+    // Don't fetch price guide if there's an active payment authorization
+    if (paymentRequirements) {
+      return;
+    }
+
+    const abortController = new AbortController();
+    
     const fetchPriceGuide = async () => {
       setIsLoadingPriceGuide(true);
       try {
@@ -71,22 +120,38 @@ export default function ComposeMessage({ isVerified, onSend, initialRecipient }:
         const isWalletAddress = recipient.startsWith('0x') && recipient.length === 42;
         const identifier = isWalletAddress ? recipient : recipient.replace(/^@/, '');
         
-        const response = await fetch(`/api/price-guide/${identifier}`);
+        const response = await fetch(`/api/price-guide/${identifier}`, {
+          signal: abortController.signal,
+        });
 
         if (response.ok) {
           const data = await response.json();
+          
+          // Check if fetch was aborted before updating state
+          if (abortController.signal.aborted) {
+            return;
+          }
+          
           setPriceGuide(data);
           
           // Set initial bid to median (or minBaseUsd if no data)
-          if (data.median) {
-            setBidAmount(data.median);
-          } else {
-            setBidAmount(data.minBaseUsd);
+          // SKIP this if there's an active payment authorization (preserve saved bidAmount)
+          // Use ref to get latest value, not closure
+          if (!paymentRequirementsRef.current) {
+            if (data.median) {
+              setBidAmount(data.median);
+            } else {
+              setBidAmount(data.minBaseUsd);
+            }
           }
         } else {
           setPriceGuide(null);
         }
       } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') {
+          // Fetch was aborted, this is expected
+          return;
+        }
         console.error("Error fetching price guide:", error);
         setPriceGuide(null);
       } finally {
@@ -95,8 +160,11 @@ export default function ComposeMessage({ isVerified, onSend, initialRecipient }:
     };
 
     const debounceTimer = setTimeout(fetchPriceGuide, 500);
-    return () => clearTimeout(debounceTimer);
-  }, [recipient, isConnected]);
+    return () => {
+      clearTimeout(debounceTimer);
+      abortController.abort();
+    };
+  }, [recipient, isConnected, paymentRequirements]);
 
   const handleSend = async () => {
     if (!recipient || !message) {
@@ -173,6 +241,26 @@ export default function ComposeMessage({ isVerified, onSend, initialRecipient }:
         const data = await response.json();
         console.log("402 Response data:", data);
         console.log("Payment requirements[0]:", data.paymentRequirements?.[0]);
+        
+        // Save to sessionStorage to survive page refreshes
+        try {
+          sessionStorage.setItem('pendingPayment', JSON.stringify({
+            paymentRequirements: data.paymentRequirements[0],
+            commitPayload: commitRequest,
+            formState: {
+              recipient,
+              message,
+              bidAmount,
+              replyBounty,
+              includeReplyBounty,
+              expirationHours,
+            },
+          }));
+        } catch (storageError) {
+          // Storage unavailable (private mode, etc.) - continue anyway
+          console.warn('Failed to save payment state to sessionStorage:', storageError);
+        }
+        
         setPaymentRequirements(data.paymentRequirements[0]);
         
         toast({
@@ -182,6 +270,13 @@ export default function ComposeMessage({ isVerified, onSend, initialRecipient }:
       } else if (response.ok) {
         // Message sent successfully
         const data = await response.json();
+        
+        // Clear sessionStorage
+        try {
+          sessionStorage.removeItem('pendingPayment');
+        } catch (storageError) {
+          console.warn('Failed to clear sessionStorage:', storageError);
+        }
         
         toast({
           title: "Bid Submitted",
@@ -300,6 +395,13 @@ export default function ComposeMessage({ isVerified, onSend, initialRecipient }:
 
       if (response.ok) {
         const data = await response.json();
+        
+        // Clear sessionStorage
+        try {
+          sessionStorage.removeItem('pendingPayment');
+        } catch (storageError) {
+          console.warn('Failed to clear sessionStorage:', storageError);
+        }
         
         toast({
           title: "Bid Submitted!",
@@ -468,9 +570,15 @@ export default function ComposeMessage({ isVerified, onSend, initialRecipient }:
                     onChange={(e) => setBidAmount(parseFloat(e.target.value) || (priceGuide?.minBaseUsd || 0.10))}
                     className="mt-2 max-w-40 font-mono text-base"
                     data-testid="input-bid-amount"
+                    disabled={!!paymentRequirements}
                   />
+                  {paymentRequirements && (
+                    <div className="text-xs text-muted-foreground mt-1">
+                      Authorization locked at ${bidAmount.toFixed(2)}
+                    </div>
+                  )}
                 </div>
-                {priceGuide && priceGuide.sampleSize > 0 && (
+                {priceGuide && priceGuide.sampleSize > 0 && !paymentRequirements && (
                   <div className="flex gap-1 flex-wrap">
                     <Button
                       variant="outline"
@@ -607,6 +715,11 @@ export default function ComposeMessage({ isVerified, onSend, initialRecipient }:
                 <Button
                   variant="outline"
                   onClick={() => {
+                    try {
+                      sessionStorage.removeItem('pendingPayment');
+                    } catch (storageError) {
+                      console.warn('Failed to clear sessionStorage:', storageError);
+                    }
                     setPaymentRequirements(null);
                     setOriginalCommitPayload(null);
                   }}
