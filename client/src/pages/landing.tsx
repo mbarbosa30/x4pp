@@ -48,23 +48,23 @@ export default function Landing() {
   });
 
   const handleGoToDashboard = async () => {
-    if (!isConnected || !address || isCheckingWallet) return;
-    
-    // Check if wallet is registered
-    if (!userByWallet) {
-      setLocation('/register');
-      return;
-    }
+    if (!isConnected || !address) return;
     
     setIsLoggingIn(true);
     try {
-      await login();
-      // Invalidate only this address's query (surgical invalidation)
-      queryClient.invalidateQueries({ queryKey: ['userByWallet', address?.toLowerCase()] });
-      // Navigate immediately - no delay needed
-      setLocation('/app');
+      // Attempt login - backend will verify if user exists
+      const authResult = await login();
+      
+      if (authResult?.user) {
+        // User exists and is logged in - go to dashboard
+        setLocation('/app');
+      } else {
+        // User doesn't exist - go to registration
+        setLocation('/register');
+      }
     } catch (error) {
       console.error('Login failed:', error);
+      // If login fails, send to registration
       setLocation('/register');
     } finally {
       setIsLoggingIn(false);

@@ -53,6 +53,7 @@ export default function ComposeMessage({ isVerified, onSend, initialRecipient }:
   const [recipient, setRecipient] = useState(pendingPayment?.formState?.recipient || initialRecipient || "");
   const [message, setMessage] = useState(pendingPayment?.formState?.message || "");
   const [bidAmount, setBidAmount] = useState(pendingPayment?.formState?.bidAmount || 0.10);
+  const [bidAmountInput, setBidAmountInput] = useState((pendingPayment?.formState?.bidAmount || 0.10).toString());
   const [replyBounty, setReplyBounty] = useState(pendingPayment?.formState?.replyBounty || 0);
   const [includeReplyBounty, setIncludeReplyBounty] = useState(pendingPayment?.formState?.includeReplyBounty || false);
   const [expirationHours, setExpirationHours] = useState(pendingPayment?.formState?.expirationHours || 24);
@@ -133,6 +134,7 @@ export default function ComposeMessage({ isVerified, onSend, initialRecipient }:
           setRecipient("");
           setMessage("");
           setBidAmount(0.10);
+          setBidAmountInput("0.10");
           setIncludeReplyBounty(false);
           setReplyBounty(0);
           setExpirationHours(24);
@@ -231,8 +233,10 @@ export default function ComposeMessage({ isVerified, onSend, initialRecipient }:
           if (!paymentRequirementsRef.current) {
             if (data.median) {
               setBidAmount(data.median);
+              setBidAmountInput(data.median.toString());
             } else {
               setBidAmount(data.minBaseUsd);
+              setBidAmountInput(data.minBaseUsd.toString());
             }
           }
         } else {
@@ -378,6 +382,7 @@ export default function ComposeMessage({ isVerified, onSend, initialRecipient }:
         setRecipient("");
         setMessage("");
         setBidAmount(0.10);
+        setBidAmountInput("0.10");
         setIncludeReplyBounty(false);
         setReplyBounty(0);
         setExpirationHours(24);
@@ -519,6 +524,7 @@ export default function ComposeMessage({ isVerified, onSend, initialRecipient }:
         setRecipient("");
         setMessage("");
         setBidAmount(0.10);
+        setBidAmountInput("0.10");
         setIncludeReplyBounty(false);
         setReplyBounty(0);
         setExpirationHours(24);
@@ -669,12 +675,29 @@ export default function ComposeMessage({ isVerified, onSend, initialRecipient }:
                   </div>
                   <Input
                     id="bid-amount"
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     lang="en-US"
-                    step="0.01"
-                    min={priceGuide?.minBaseUsd || 0.10}
-                    value={bidAmount}
-                    onChange={(e) => setBidAmount(parseFloat(e.target.value) || (priceGuide?.minBaseUsd || 0.10))}
+                    value={bidAmountInput}
+                    onChange={(e) => {
+                      // Allow empty string and valid decimal numbers (mobile-friendly)
+                      const val = e.target.value;
+                      setBidAmountInput(val);
+                    }}
+                    onBlur={(e) => {
+                      // On blur, parse and enforce minimum value
+                      const val = e.target.value.trim();
+                      const parsed = parseFloat(val);
+                      const minBid = priceGuide?.minBaseUsd || 0.10;
+                      
+                      if (isNaN(parsed) || val === '' || parsed < minBid) {
+                        setBidAmount(minBid);
+                        setBidAmountInput(minBid.toString());
+                      } else {
+                        setBidAmount(parsed);
+                        setBidAmountInput(parsed.toString());
+                      }
+                    }}
                     className="mt-2 max-w-40 font-mono text-base"
                     data-testid="input-bid-amount"
                     disabled={!!paymentRequirements}
@@ -690,7 +713,10 @@ export default function ComposeMessage({ isVerified, onSend, initialRecipient }:
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => setBidAmount(priceGuide.minBaseUsd)}
+                      onClick={() => {
+                        setBidAmount(priceGuide.minBaseUsd);
+                        setBidAmountInput(priceGuide.minBaseUsd.toString());
+                      }}
                       data-testid="button-bid-min"
                       className="text-xs"
                     >
@@ -699,7 +725,10 @@ export default function ComposeMessage({ isVerified, onSend, initialRecipient }:
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => setBidAmount(priceGuide.median!)}
+                      onClick={() => {
+                        setBidAmount(priceGuide.median!);
+                        setBidAmountInput(priceGuide.median!.toString());
+                      }}
                       data-testid="button-bid-median"
                       className="text-xs"
                     >
@@ -708,7 +737,10 @@ export default function ComposeMessage({ isVerified, onSend, initialRecipient }:
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => setBidAmount(priceGuide.p75!)}
+                      onClick={() => {
+                        setBidAmount(priceGuide.p75!);
+                        setBidAmountInput(priceGuide.p75!.toString());
+                      }}
                       data-testid="button-bid-high"
                       className="text-xs"
                     >

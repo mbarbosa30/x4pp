@@ -37,7 +37,7 @@ interface WalletContextType {
   isConnecting: boolean;
   connect: () => Promise<void>;
   disconnect: () => Promise<void>;
-  login: () => Promise<void>;
+  login: () => Promise<{ user: any } | null>;
 }
 
 const WalletContext = createContext<WalletContextType | null>(null);
@@ -89,7 +89,7 @@ function WalletProviderInner({ children }: { children: ReactNode }) {
   const handleLogin = async () => {
     if (!isConnected || !address) {
       console.log('[WalletProvider] Cannot login: wallet not connected');
-      return;
+      return null;
     }
     
     console.log('[WalletProvider] Manual login...');
@@ -103,8 +103,10 @@ function WalletProviderInner({ children }: { children: ReactNode }) {
       const data = await res.json();
       console.log('[WalletProvider] Login successful:', data);
       queryClient.setQueryData(['/api/auth/me'], data);
+      return data;
     } else {
       console.error('[WalletProvider] Login failed:', res.status);
+      return null;
     }
   };
 
