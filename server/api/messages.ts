@@ -30,7 +30,10 @@ router.get("/sent", async (req, res) => {
       return res.status(404).json({ error: "User not found or wallet not configured" });
     }
 
+    console.log('[API /messages/sent] Fetching sent messages for wallet:', user.walletAddress.toLowerCase());
+
     // Get sent messages with recipient info
+    // Note: Both senderWallet and walletAddress are stored in lowercase
     const sentMessages = await db
       .select({
         id: messages.id,
@@ -50,8 +53,10 @@ router.get("/sent", async (req, res) => {
       })
       .from(messages)
       .leftJoin(users, sql`lower(${users.walletAddress}) = lower(${messages.recipientWallet})`)
-      .where(sql`lower(${messages.senderWallet}) = ${user.walletAddress.toLowerCase()}`)
+      .where(eq(messages.senderWallet, user.walletAddress.toLowerCase()))
       .orderBy(desc(messages.sentAt));
+
+    console.log('[API /messages/sent] Found', sentMessages.length, 'sent messages');
 
     // Serialize timestamps to ISO strings for proper frontend handling
     const serializedMessages = sentMessages.map(msg => ({
