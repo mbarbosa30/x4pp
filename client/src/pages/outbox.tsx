@@ -20,11 +20,19 @@ interface SentMessage {
 }
 
 export default function Outbox() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
 
-  const { data: messages = [], isLoading } = useQuery<SentMessage[]>({
+  const { data: messages = [], isLoading, error } = useQuery<SentMessage[]>({
     queryKey: ['/api/messages/sent'],
     enabled: isAuthenticated,
+  });
+
+  console.log('[Outbox] Component state:', {
+    isAuthenticated,
+    userWallet: user?.walletAddress,
+    messageCount: messages?.length,
+    isLoading,
+    hasError: !!error,
   });
 
   const getRecipientDisplayInfo = (message: SentMessage) => {
@@ -117,6 +125,17 @@ export default function Outbox() {
     );
   }
 
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Card className="p-6 max-w-md">
+          <h3 className="text-lg font-medium mb-2 text-destructive">Error loading messages</h3>
+          <p className="text-sm text-muted-foreground">{String(error)}</p>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8 max-w-4xl">
@@ -131,6 +150,11 @@ export default function Outbox() {
               <Mail className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <h3 className="text-lg font-medium mb-2">No sent messages</h3>
               <p className="text-muted-foreground">Messages you send will appear here</p>
+              {user?.walletAddress && (
+                <p className="text-xs text-muted-foreground mt-4">
+                  Wallet: {user.walletAddress.slice(0, 6)}...{user.walletAddress.slice(-4)}
+                </p>
+              )}
             </div>
           </Card>
         ) : (
