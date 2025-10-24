@@ -4,6 +4,13 @@
 
 x4pp is a peer-to-peer messaging application featuring an "attention market" where message sending uses wallet-based routing with open bidding. Recipients set minimum bid prices, while senders (who don't need accounts) can send messages to either usernames or wallet addresses. The platform uses an open bidding model where senders place bids, and recipients manually accept or decline messages. Key features include EIP-3009 deferred payment authorization (funds remain in sender's wallet until acceptance), automatic bid expiry, and a privacy-preserving reputation system.
 
+## Recent Changes
+
+**October 24, 2025:**
+- Fixed mobile bid input bug: Users can now properly delete and edit bid amounts when sending messages (dual-state pattern with string display and number validation)
+- Fixed login flow race condition: login() now returns auth payload directly to prevent registered wallets from being incorrectly routed to registration
+- Fixed outbox query bug: Messages sent before registration now appear in outbox after user registers (changed SQL template to eq() function for reliable wallet address comparison)
+
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.
