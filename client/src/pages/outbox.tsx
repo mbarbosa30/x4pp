@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Clock, CheckCircle, XCircle, Mail, Shield } from "lucide-react";
 
 interface SentMessage {
@@ -22,17 +23,23 @@ interface SentMessage {
 export default function Outbox() {
   const { isAuthenticated, user } = useAuth();
 
-  const { data: messages = [], isLoading, error } = useQuery<SentMessage[]>({
+  const { data: messages = [], isLoading, error, refetch } = useQuery<SentMessage[]>({
     queryKey: ['/api/messages/sent'],
     enabled: isAuthenticated,
+    staleTime: 0, // Always fetch fresh data
+    gcTime: 0, // Don't cache
+    refetchOnMount: 'always', // Always refetch when component mounts
   });
 
   console.log('[Outbox] Component state:', {
     isAuthenticated,
+    userId: user?.id,
+    username: user?.username,
     userWallet: user?.walletAddress,
     messageCount: messages?.length,
     isLoading,
     hasError: !!error,
+    errorMessage: error ? String(error) : null,
   });
 
   const getRecipientDisplayInfo = (message: SentMessage) => {
@@ -139,9 +146,20 @@ export default function Outbox() {
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8 max-w-4xl">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold">Sent Messages</h1>
-          <p className="text-muted-foreground mt-2">Track your outgoing bids</p>
+        <div className="mb-6 flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold">Sent Messages</h1>
+            <p className="text-muted-foreground mt-2">Track your outgoing bids</p>
+          </div>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => refetch()}
+            disabled={isLoading}
+            data-testid="button-refresh-outbox"
+          >
+            Refresh
+          </Button>
         </div>
 
         {messages.length === 0 ? (
