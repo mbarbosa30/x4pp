@@ -73,6 +73,16 @@ function WalletProviderInner({ children }: { children: ReactNode }) {
   // Track reconnection attempts to break infinite loops
   const reconnectAttemptsRef = useRef(0);
   const lastStatusChangeRef = useRef(Date.now());
+  const hasDisconnectedOnceRef = useRef(false);
+
+  // Force disconnect on first mount to clear any stale auto-reconnect sessions
+  useEffect(() => {
+    if (!hasDisconnectedOnceRef.current && status !== 'disconnected') {
+      console.log('[WalletProvider] Initial mount - forcing disconnect to clear stale sessions');
+      hasDisconnectedOnceRef.current = true;
+      wagmiDisconnectAsync().catch(() => {});
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Monitor connection state with detailed logging
   useEffect(() => {
@@ -93,8 +103,8 @@ function WalletProviderInner({ children }: { children: ReactNode }) {
       reconnectAttemptsRef.current++;
       console.log('[WalletProvider] Rapid reconnection attempt detected:', reconnectAttemptsRef.current);
       
-      // After 5 rapid attempts, force a clean disconnect to break the loop
-      if (reconnectAttemptsRef.current >= 5) {
+      // After 3 rapid attempts, force a clean disconnect to break the loop
+      if (reconnectAttemptsRef.current >= 3) {
         console.log('[WalletProvider] Breaking reconnection loop - forcing disconnect');
         reconnectAttemptsRef.current = 0;
         wagmiDisconnectAsync().catch(() => {});

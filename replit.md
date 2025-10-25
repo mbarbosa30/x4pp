@@ -7,6 +7,12 @@ x4pp is a peer-to-peer messaging application featuring an "attention market" whe
 ## Recent Changes
 
 **October 25, 2025:**
+- **Wallet Connection Stability** (critical fixes):
+  - Implemented HMR-safe singleton pattern for AppKit and wagmi config in `globalThis` to prevent recreation on hot reloads
+  - Added auto-disconnect on mount to clear stale WalletConnect sessions that caused reconnection loops
+  - Implemented reconnection loop detection - auto-breaks after 3 rapid attempts
+  - Cleared stale WalletConnect localStorage keys (`wc@2`, `@w3m`, `W3M`) on init to prevent auto-reconnect issues
+  - Fixed routing order: moved catch-all `/:identifier` route to end so `/app`, `/inbox`, etc. are matched before username routes
 - **ENS Domain Support**: Added ENS resolution for message recipients - users can now send messages to ENS names like "vitalik.eth" which are automatically resolved to wallet addresses using viem on Ethereum mainnet
 - **Authentication Flow Improvements** (full polish based on analysis):
   - Optimized landing page to use query data intelligently - no longer makes redundant login calls
