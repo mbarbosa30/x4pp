@@ -20,10 +20,10 @@ export const CELO_ALFAJORES = {
   decimals: 6,
 };
 
-// Use mainnet for production
-export const CELO_CONFIG = process.env.NODE_ENV === "production" 
+// Use mainnet for production (REPLIT_DEPLOYMENT=1 in published apps)
+export const CELO_CONFIG = process.env.REPLIT_DEPLOYMENT === "1" 
   ? CELO_MAINNET 
-  : CELO_MAINNET; // Using mainnet as requested
+  : CELO_MAINNET; // Using mainnet in both dev and prod as requested
 
 // Payment wallet configuration
 export const PAYMENT_WALLET = {

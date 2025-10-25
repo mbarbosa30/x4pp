@@ -11,6 +11,9 @@ declare module "express-session" {
   }
 }
 
+// Detect production using Replit's REPLIT_DEPLOYMENT variable
+const isProduction = process.env.REPLIT_DEPLOYMENT === "1";
+
 export const sessionMiddleware = session({
   store: new PgStore({
     pool: pool,
@@ -23,7 +26,7 @@ export const sessionMiddleware = session({
   cookie: {
     maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: isProduction, // Use HTTPS cookies in production
     sameSite: "lax",
   },
 });

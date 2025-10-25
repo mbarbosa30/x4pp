@@ -7,6 +7,12 @@ x4pp is a peer-to-peer messaging application featuring an "attention market" whe
 ## Recent Changes
 
 **October 25, 2025:**
+- **Production Authentication Fix** (CRITICAL):
+  - Fixed session cookies not working in production by using `REPLIT_DEPLOYMENT=1` instead of `NODE_ENV` to detect production
+  - Updated `server/session.ts` to properly set `secure: true` for HTTPS cookies in published deployments
+  - Updated `server/config/celo.ts` for consistency with production detection
+  - Sessions now persist correctly in both development and production environments
+- **Archive Page**: Added `/inbox/archived` route and tab for viewing expired and declined messages
 - **Wallet Connection Stability** (critical fixes):
   - Implemented HMR-safe singleton pattern for AppKit and wagmi config in `globalThis` to prevent recreation on hot reloads
   - Added auto-disconnect on mount to clear stale WalletConnect sessions that caused reconnection loops
