@@ -44,7 +44,7 @@ if (typeof window !== 'undefined') {
   });
 }
 
-// WagmiAdapter with auto-reconnect disabled
+// WagmiAdapter configuration
 export const wagmiAdapter = new WagmiAdapter({
   networks: [celoChain],
   projectId,

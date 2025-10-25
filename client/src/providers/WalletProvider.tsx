@@ -73,16 +73,10 @@ function WalletProviderInner({ children }: { children: ReactNode }) {
   // Track reconnection attempts to break infinite loops
   const reconnectAttemptsRef = useRef(0);
   const lastStatusChangeRef = useRef(Date.now());
-  const hasDisconnectedOnceRef = useRef(false);
-
-  // Force disconnect on first mount to clear any stale auto-reconnect sessions
-  useEffect(() => {
-    if (!hasDisconnectedOnceRef.current && status !== 'disconnected') {
-      console.log('[WalletProvider] Initial mount - forcing disconnect to clear stale sessions');
-      hasDisconnectedOnceRef.current = true;
-      wagmiDisconnectAsync().catch(() => {});
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const loopBreakTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Track whether disconnect was user-initiated
+  const userInitiatedDisconnectRef = useRef(false);
 
   // Monitor connection state with detailed logging
   useEffect(() => {
@@ -99,33 +93,68 @@ function WalletProviderInner({ children }: { children: ReactNode }) {
     });
     
     // Detect reconnection loop: status changing rapidly between connecting/disconnected
-    if (status === 'connecting' && timeSinceLastChange < 1000) {
+    if (status === 'connecting' && timeSinceLastChange < 500) {
       reconnectAttemptsRef.current++;
       console.log('[WalletProvider] Rapid reconnection attempt detected:', reconnectAttemptsRef.current);
       
-      // After 3 rapid attempts, force a clean disconnect to break the loop
-      if (reconnectAttemptsRef.current >= 3) {
+      // After 2 rapid attempts, force a clean disconnect to break the loop
+      if (reconnectAttemptsRef.current >= 2) {
         console.log('[WalletProvider] Breaking reconnection loop - forcing disconnect');
-        reconnectAttemptsRef.current = 0;
-        wagmiDisconnectAsync().catch(() => {});
+        
+        // Clear any existing timeout
+        if (loopBreakTimeoutRef.current) {
+          clearTimeout(loopBreakTimeoutRef.current);
+        }
+        
+        // Disconnect and reset counter after a delay
+        loopBreakTimeoutRef.current = setTimeout(() => {
+          reconnectAttemptsRef.current = 0;
+          wagmiDisconnectAsync().catch(() => {});
+        }, 100);
       }
     } else if (status === 'connected') {
       // Reset counter on successful connection
       reconnectAttemptsRef.current = 0;
+      if (loopBreakTimeoutRef.current) {
+        clearTimeout(loopBreakTimeoutRef.current);
+        loopBreakTimeoutRef.current = null;
+      }
+    } else if (timeSinceLastChange > 2000) {
+      // Reset counter if enough time has passed
+      reconnectAttemptsRef.current = 0;
     }
+    
+    return () => {
+      if (loopBreakTimeoutRef.current) {
+        clearTimeout(loopBreakTimeoutRef.current);
+      }
+    };
   }, [status, isConnected, address, wagmiDisconnectAsync]);
 
   // Handle wallet disconnection - clean up query cache
   useEffect(() => {
     if (!isConnected && prevAddressRef.current) {
-      console.log('[WalletProvider] Wallet disconnected, cleaning up cache for:', prevAddressRef.current);
+      console.log('[WalletProvider] Wallet disconnected:', {
+        previousAddress: prevAddressRef.current,
+        userInitiated: userInitiatedDisconnectRef.current
+      });
       
-      // Remove queries keyed by the previous address
-      queryClient.removeQueries({ queryKey: ['userByWallet', prevAddressRef.current.toLowerCase()] });
-      
-      // Clear auth state
-      fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {});
-      queryClient.removeQueries({ queryKey: ['/api/auth/me'] });
+      // Only logout and clear cache if this was a user-initiated disconnect
+      if (userInitiatedDisconnectRef.current) {
+        console.log('[WalletProvider] User-initiated disconnect - logging out');
+        
+        // Remove queries keyed by the previous address
+        queryClient.removeQueries({ queryKey: ['userByWallet', prevAddressRef.current.toLowerCase()] });
+        
+        // Clear auth state
+        fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {});
+        queryClient.removeQueries({ queryKey: ['/api/auth/me'] });
+        
+        // Reset flag
+        userInitiatedDisconnectRef.current = false;
+      } else {
+        console.log('[WalletProvider] Automatic disconnect - keeping session alive');
+      }
     }
     
     prevAddressRef.current = address;
@@ -184,25 +213,12 @@ function WalletProviderInner({ children }: { children: ReactNode }) {
   };
 
   const handleDisconnect = async () => {
-    console.log('[WalletProvider] Disconnecting...');
+    console.log('[WalletProvider] User-initiated disconnect');
     
-    // Capture address before disconnecting
-    const currentAddress = address;
+    // Mark this as a user-initiated disconnect
+    userInitiatedDisconnectRef.current = true;
     
-    // Clear backend session
-    await fetch('/api/auth/logout', { 
-      method: 'POST', 
-      credentials: 'include' 
-    }).catch(() => {});
-    
-    // Clear query cache
-    if (currentAddress) {
-      queryClient.removeQueries({ queryKey: ['userByWallet', currentAddress.toLowerCase()] });
-    }
-    queryClient.removeQueries({ queryKey: ['/api/auth/me'] });
-    queryClient.removeQueries({ queryKey: ['/api/messages'] });
-    
-    // Disconnect wallet
+    // Disconnect wallet (the useEffect will handle logout)
     try {
       await wagmiDisconnectAsync();
       console.log('[WalletProvider] Wallet disconnected successfully');
