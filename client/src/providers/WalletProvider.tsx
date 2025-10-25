@@ -1,34 +1,51 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, ReactNode, useRef } from "react";
 import { createAppKit } from '@reown/appkit/react';
-import { WagmiProvider, useDisconnect } from 'wagmi';
-import { useAppKitAccount, useAppKit } from '@reown/appkit/react';
+import { WagmiProvider, useDisconnect, useAccount } from 'wagmi';
+import { useAppKit } from '@reown/appkit/react';
 import { wagmiAdapter, celoChain, metadata, projectId } from "@/lib/reown-config";
 import { queryClient } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 
-// Initialize AppKit outside the component render cycle (per official docs)
-if (!projectId) {
-  console.error("AppKit Initialization Error: Project ID is missing.");
-} else {
-  createAppKit({
-    adapters: [wagmiAdapter],
-    projectId,
-    networks: [celoChain],
-    defaultNetwork: celoChain,
-    metadata,
-    features: {
-      analytics: false,
-      email: false,
-      socials: false,
-      onramp: false,
-      swaps: false,
-    },
-    themeMode: 'dark',
-    themeVariables: {
-      '--w3m-accent': 'hsl(262 70% 62%)',
-    },
-    allowUnsupportedChain: true,
-  });
+// HMR-safe singleton initialization (prevents recreation on hot reload)
+type Singletons = {
+  appKit: ReturnType<typeof createAppKit>;
+  initTimestamp: string;
+}
+
+const g = globalThis as unknown as { __x4pp?: Singletons };
+
+if (!g.__x4pp) {
+  console.log('[WalletProvider] INITIALIZING SINGLETONS (should only happen once)');
+  
+  if (!projectId) {
+    console.error("AppKit Initialization Error: Project ID is missing.");
+  } else {
+    const appKit = createAppKit({
+      adapters: [wagmiAdapter],
+      projectId,
+      networks: [celoChain],
+      defaultNetwork: celoChain,
+      metadata,
+      features: {
+        analytics: false,
+        email: false,
+        socials: false,
+        onramp: false,
+        swaps: false,
+      },
+      themeMode: 'dark',
+      themeVariables: {
+        '--w3m-accent': 'hsl(262 70% 62%)',
+      },
+      allowUnsupportedChain: true,
+    });
+    
+    g.__x4pp = { 
+      appKit,
+      initTimestamp: new Date().toISOString()
+    };
+    console.log('[WalletProvider] AppKit initialized at:', g.__x4pp.initTimestamp);
+  }
 }
 
 interface WalletContextType {
@@ -43,41 +60,58 @@ interface WalletContextType {
 const WalletContext = createContext<WalletContextType | null>(null);
 
 function WalletProviderInner({ children }: { children: ReactNode }) {
-  const { address, isConnected } = useAppKitAccount();
+  // Use wagmi's useAccount hook (more reliable than useAppKitAccount)
+  const { address, isConnected, status } = useAccount();
   const appKit = useAppKit();
   const { disconnectAsync: wagmiDisconnectAsync } = useDisconnect();
   const [isConnecting, setIsConnecting] = useState(false);
-  const [isDisconnecting, setIsDisconnecting] = useState(false);
   const [, setLocation] = useLocation();
+  
+  // Track previous address for cleanup
+  const prevAddressRef = useRef<string>();
 
-  // Monitor connection state
+  // Monitor connection state with detailed logging
   useEffect(() => {
     console.log('[WalletProvider] State changed:', { 
+      status,
       isConnected, 
       address,
-      isDisconnecting,
       timestamp: new Date().toISOString()
     });
-    
-    // When wallet disconnects, surgically remove only address-keyed queries
-    // (Avoids breaking unrelated cached data)
-    if (!isConnected && !isDisconnecting && address) {
-      queryClient.removeQueries({ queryKey: ['userByWallet', address.toLowerCase()] });
-      queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
+  }, [status, isConnected, address]);
+
+  // Handle wallet disconnection - clean up query cache
+  useEffect(() => {
+    if (!isConnected && prevAddressRef.current) {
+      console.log('[WalletProvider] Wallet disconnected, cleaning up cache for:', prevAddressRef.current);
+      
+      // Remove queries keyed by the previous address
+      queryClient.removeQueries({ queryKey: ['userByWallet', prevAddressRef.current.toLowerCase()] });
+      
+      // Clear auth state
+      fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {});
+      queryClient.removeQueries({ queryKey: ['/api/auth/me'] });
     }
-  }, [isConnected, isDisconnecting, address]);
+    
+    prevAddressRef.current = address;
+  }, [isConnected, address]);
 
   const handleConnect = async () => {
     try {
       setIsConnecting(true);
-      console.log('[WalletProvider] CONNECT: Starting...', { appKit });
+      console.log('[WalletProvider] Opening wallet modal...', { 
+        appKitAvailable: !!appKit,
+        singleton: !!g.__x4pp 
+      });
+      
       if (!appKit) {
         console.error('[WalletProvider] AppKit not initialized!');
-        return;
+        throw new Error('AppKit not available');
       }
-      console.log('[WalletProvider] Opening wallet modal...');
+      
       await appKit.open();
-      console.log('[WalletProvider] Modal opened');
+      console.log('[WalletProvider] Modal opened, waiting for connection...');
+      
     } catch (error) {
       console.error("[WalletProvider] Failed to open wallet modal:", error);
       throw error;
@@ -92,10 +126,11 @@ function WalletProviderInner({ children }: { children: ReactNode }) {
       return null;
     }
     
-    console.log('[WalletProvider] Manual login...');
+    console.log('[WalletProvider] Logging in with address:', address);
     const res = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({ walletAddress: address }),
     });
     
@@ -111,25 +146,28 @@ function WalletProviderInner({ children }: { children: ReactNode }) {
   };
 
   const handleDisconnect = async () => {
-    console.log('[WalletProvider] DISCONNECT: Starting...');
+    console.log('[WalletProvider] Disconnecting...');
     
     // Capture address before disconnecting
     const currentAddress = address;
     
     // Clear backend session
-    await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
+    await fetch('/api/auth/logout', { 
+      method: 'POST', 
+      credentials: 'include' 
+    }).catch(() => {});
     
-    // Surgically clear wallet-specific queries only
+    // Clear query cache
     if (currentAddress) {
       queryClient.removeQueries({ queryKey: ['userByWallet', currentAddress.toLowerCase()] });
     }
     queryClient.removeQueries({ queryKey: ['/api/auth/me'] });
     queryClient.removeQueries({ queryKey: ['/api/messages'] });
     
-    // Disconnect ALL wallets
+    // Disconnect wallet
     try {
       await wagmiDisconnectAsync();
-      console.log('[WalletProvider] Wallet disconnected');
+      console.log('[WalletProvider] Wallet disconnected successfully');
     } catch (e) {
       console.error('[WalletProvider] Disconnect error:', e);
     }
@@ -142,7 +180,7 @@ function WalletProviderInner({ children }: { children: ReactNode }) {
       value={{
         address,
         isConnected,
-        isConnecting,
+        isConnecting: isConnecting || status === 'connecting',
         connect: handleConnect,
         disconnect: handleDisconnect,
         login: handleLogin,

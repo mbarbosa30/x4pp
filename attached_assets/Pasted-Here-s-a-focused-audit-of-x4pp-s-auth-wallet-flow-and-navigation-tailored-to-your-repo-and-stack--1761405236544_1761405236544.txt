@@ -1,0 +1,244 @@
+Here’s a focused audit of x4pp’s auth + wallet flow and navigation, tailored to your repo and stack. I’ll call out the likely failure modes, what to change, and give paste-ready patterns.
+
+(For reference, I could load the repo root and structure, but GitHub intermittently errors on deeper files from here, so I’m not quoting line numbers. The advice below uses best-practice patterns for Reown AppKit + wagmi + TanStack Query that map cleanly to your code.)  ￼
+
+⸻
+
+1) Wallet (Reown AppKit + wagmi) — keep it singleton & stable
+
+What’s going wrong
+	•	Recreating wagmi config, AppKit instance, or QueryClient on re-renders (or HMR) silently kills the WalletConnect session; isConnected stays false with no error. This typically happens when those are created inside React components or conditionally mounted providers.
+
+Fix (paste-ready)
+
+Create singletons outside render (and HMR-safe in dev):
+
+// client/src/providers/WalletProvider.tsx
+import React from 'react'
+import { WagmiProvider, createConfig } from 'wagmi'
+import { celo, celoAlfajores } from 'viem/chains'
+import { http } from 'viem'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { createAppKit } from '@reown/appkit/react' // use the React adapter
+
+type Singletons = {
+  queryClient: QueryClient
+  wagmiConfig: ReturnType<typeof createConfig>
+  appKit: ReturnType<typeof createAppKit>
+}
+
+const g = globalThis as unknown as { __x4pp?: Singletons }
+if (!g.__x4pp) {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        staleTime: 10_000,
+        gcTime: 300_000,
+        refetchOnReconnect: 'always',
+        refetchOnWindowFocus: false,
+      },
+    },
+  })
+
+  const wagmiConfig = createConfig({
+    chains: [celo, celoAlfajores],
+    transports: {
+      [celo.id]: http('https://forno.celo.org'),
+      [celoAlfajores.id]: http('https://alfajores-forno.celo-testnet.org'),
+    },
+    ssr: false,
+  })
+
+  const appKit = createAppKit({
+    projectId: import.meta.env.VITE_WC_PROJECT_ID!,
+    wagmiConfig,
+    // optional AppKit options…
+  })
+
+  g.__x4pp = { queryClient, wagmiConfig, appKit }
+}
+
+const { queryClient, wagmiConfig } = g.__x4pp!
+
+export function WalletProvider({ children }: { children: React.ReactNode }) {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <WagmiProvider config={wagmiConfig}>{children}</WagmiProvider>
+    </QueryClientProvider>
+  )
+}
+
+Why: AppKit & wagmi should be initialized once (docs emphasize init with adapters and options, not per render).  ￼
+Also: wagmi recommends creating config once at top-level; don’t make it per-render.  ￼
+To avoid hydration weirdness, keep ssr:false and drive UI off useAccount().status ('connecting'|'connected'|'disconnected').  ￼
+
+⸻
+
+2) Auth state — make /api/session/me the single source of truth
+
+What’s going wrong
+	•	Deriving “logged in” from wallet state (address/isConnected) causes races and flicker.
+	•	Redirects fire before the session check finishes, or stale React Query data is reused after wallet switch.
+
+Fix (paste-ready)
+
+Create one hook, use it everywhere:
+
+// client/src/hooks/useAuth.ts
+export function useAuth() {
+  return useQuery({
+    queryKey: ['me'],
+    queryFn: async () => {
+      const r = await fetch('/api/session/me', { credentials: 'include' })
+      if (r.status === 401) return null
+      if (!r.ok) throw new Error('whoami failed')
+      return r.json()  // { id, username, walletAddress, ... }
+    },
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: 'always',
+  })
+}
+
+	•	Gate routes on this query, not on wallet:
+
+function RequireAuth({ children }: { children: React.ReactNode }) {
+  const { data: me, isLoading } = useAuth()
+  if (isLoading) return <Splash />
+  return me ? <>{children}</> : <Navigate to={`/login?returnTo=${encodeURIComponent(location.pathname)}`} />
+}
+
+function PublicOnly({ children }: { children: React.ReactNode }) {
+  const { data: me, isLoading } = useAuth()
+  if (isLoading) return <Splash />
+  return me ? <Navigate to="/app" /> : <>{children}</>
+}
+
+	•	On wallet disconnect or account change: explicitly log out and clear ['me'].
+
+const { address, isConnected } = useAccount()
+useEffect(() => {
+  if (!isConnected) {
+    fetch('/api/session/logout', { method: 'POST', credentials: 'include' })
+    queryClient.removeQueries({ queryKey: ['me'] })
+  }
+}, [isConnected])
+
+	•	Server /api/session/me should send 401 when unauthenticated and include Cache-Control: no-store and Vary: Cookie, Authorization to avoid proxy cache surprises.
+
+⸻
+
+3) “Is wallet registered?” — key queries by address, don’t manually invalidate
+
+What’s going wrong
+	•	Using staleTime: 0, gcTime: 0 plus a useEffect that invalidates on every address change creates re-fetch churn and can re-mount providers (breaking WalletConnect).
+
+Fix (paste-ready)
+
+Use the address in the query key and remove the invalidation effect:
+
+const { address, isConnected } = useAccount()
+
+const { data: userByWallet, isFetching, isError } = useQuery({
+  queryKey: ['userByWallet', address],     // address segregates cache
+  enabled: Boolean(isConnected && address),
+  queryFn: async () => {
+    const r = await fetch(`/api/users/wallet/${address}`, {
+      headers: { 'Cache-Control': 'no-store' },
+      credentials: 'include',
+    })
+    if (!r.ok) throw new Error('lookup failed')
+    return r.json()                        // { exists: boolean, ... }
+  },
+  staleTime: 10_000,
+  gcTime: 300_000,
+  refetchOnMount: 'always',
+  refetchOnReconnect: 'always',
+})
+
+If you want to be extra-safe, when a user disconnects, remove the previous address’ cache once:
+
+const prevAddr = useRef<string>()
+useEffect(() => {
+  if (!isConnected && prevAddr.current) {
+    queryClient.removeQueries({ queryKey: ['userByWallet', prevAddr.current] })
+  }
+  prevAddr.current = address
+}, [isConnected, address])
+
+This pattern aligns with TanStack Query guidance (use stable keys; use reconnect refetchs rather than manual loops).  ￼
+
+⸻
+
+4) Navigation (Wouter) — avoid redirect loops & flashes
+
+What to change
+	•	Don’t navigate while queries are loading. Wait for useAuth() to settle, then decide.
+	•	Use <RequireAuth> on /app, /inbox, etc.; and <PublicOnly> on /login, /register.
+	•	When pushing to /login, include ?returnTo= and on success call navigate(returnTo || '/app', { replace: true }) so back button doesn’t bounce the user to login again.
+	•	Avoid calling navigate() in render paths; call it inside useEffect gated by !isLoading.
+
+⸻
+
+5) Server-side auth hygiene (Express sessions)
+
+Double-check:
+	•	Cookie: HttpOnly; Secure; SameSite=Lax; Path=/; (and trust proxy if behind a proxy).
+	•	POST /api/session/login → set session + return user JSON
+	•	POST /api/session/logout → destroy session; return 204
+	•	GET /api/session/me → 200 user or 401
+	•	Add:
+
+Cache-Control: no-store, no-cache, must-revalidate, private
+Pragma: no-cache
+Expires: 0
+Vary: Cookie, Authorization
+
+
+
+(These don’t interfere with WalletConnect; that handshake uses separate relayers/websockets.)
+
+⸻
+
+6) Connect button — don’t create connectors on click
+
+Use the connector you already configured:
+
+import { useConnect } from 'wagmi'
+
+export function ConnectButton() {
+  const { connect, connectors, isPending } = useConnect()
+  const injected = connectors.find(c => c.id === 'injected') // or your AppKit connector id
+
+  return (
+    <button
+      onClick={() => injected && connect({ connector: injected })}
+      disabled={!injected || isPending}
+      className="btn btn-primary"
+    >
+      {isPending ? 'Connecting…' : 'Connect Wallet'}
+    </button>
+  )
+}
+
+Don’t instantiate AppKit or wagmi config here. Reown/AppKit docs: initialize once with the adapter; pass wagmi config; then open modal / connect via existing connector.  ￼
+
+⸻
+
+7) Quick validation checklist (run these now)
+	•	Add a one-time log right after you create singletons: console.log('WALLET INIT'). You should see it once per full reload (not on every refetch).
+	•	Network tab: /api/session/me fires once per page load; /api/users/wallet/:address fires once per address change (not a storm).
+	•	Switching wallets: triggers logout + ['me'] → null → route to /login (no flicker).
+	•	Refresh on /app: shows splash ~300ms, then app (no “flash of /login”).
+	•	Connect flow: status: 'connecting' → 'connected', without bouncing to false.
+
+⸻
+
+Why I’m confident these are the right fixes
+	•	AppKit/wagmi must be initialized once and not inside render (official AppKit & wagmi setup patterns).  ￼
+	•	React Query prefers address-keyed queries & built-in reconnect refetches over manual invalidate loops.  ￼
+	•	useAccount().status is the correct way to gate wallet UI states (connecting, connected, etc.).  ￼
+
+⸻
+
+If you want, drop your current WalletProvider.tsx, landing.tsx, and your Router file here and I’ll hand you an exact patch (minimal changes, same UI).
