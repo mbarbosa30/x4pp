@@ -69,16 +69,41 @@ function WalletProviderInner({ children }: { children: ReactNode }) {
   
   // Track previous address for cleanup
   const prevAddressRef = useRef<string>();
+  
+  // Track reconnection attempts to break infinite loops
+  const reconnectAttemptsRef = useRef(0);
+  const lastStatusChangeRef = useRef(Date.now());
 
   // Monitor connection state with detailed logging
   useEffect(() => {
+    const now = Date.now();
+    const timeSinceLastChange = now - lastStatusChangeRef.current;
+    lastStatusChangeRef.current = now;
+    
     console.log('[WalletProvider] State changed:', { 
       status,
       isConnected, 
       address,
+      timeSinceLastChange,
       timestamp: new Date().toISOString()
     });
-  }, [status, isConnected, address]);
+    
+    // Detect reconnection loop: status changing rapidly between connecting/disconnected
+    if (status === 'connecting' && timeSinceLastChange < 1000) {
+      reconnectAttemptsRef.current++;
+      console.log('[WalletProvider] Rapid reconnection attempt detected:', reconnectAttemptsRef.current);
+      
+      // After 5 rapid attempts, force a clean disconnect to break the loop
+      if (reconnectAttemptsRef.current >= 5) {
+        console.log('[WalletProvider] Breaking reconnection loop - forcing disconnect');
+        reconnectAttemptsRef.current = 0;
+        wagmiDisconnectAsync().catch(() => {});
+      }
+    } else if (status === 'connected') {
+      // Reset counter on successful connection
+      reconnectAttemptsRef.current = 0;
+    }
+  }, [status, isConnected, address, wagmiDisconnectAsync]);
 
   // Handle wallet disconnection - clean up query cache
   useEffect(() => {
@@ -99,6 +124,9 @@ function WalletProviderInner({ children }: { children: ReactNode }) {
   const handleConnect = async () => {
     try {
       setIsConnecting(true);
+      // Reset reconnection counter when user manually connects
+      reconnectAttemptsRef.current = 0;
+      
       console.log('[WalletProvider] Opening wallet modal...', { 
         appKitAvailable: !!appKit,
         singleton: !!g.__x4pp 
