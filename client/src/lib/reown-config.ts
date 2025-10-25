@@ -28,7 +28,23 @@ export const metadata = {
   icons: ['https://x4pp.app/favicon.ico'],
 };
 
-// WagmiAdapter - storage is handled automatically
+// Clear any stale WalletConnect storage on init to prevent auto-reconnect issues
+if (typeof window !== 'undefined') {
+  // Clear WalletConnect storage keys that might cause reconnection loops
+  const keysToRemove: string[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && (key.startsWith('wc@2') || key.startsWith('@w3m') || key.startsWith('W3M'))) {
+      keysToRemove.push(key);
+    }
+  }
+  keysToRemove.forEach(key => {
+    console.log('[reown-config] Clearing stale storage:', key);
+    localStorage.removeItem(key);
+  });
+}
+
+// WagmiAdapter with auto-reconnect disabled
 export const wagmiAdapter = new WagmiAdapter({
   networks: [celoChain],
   projectId,
