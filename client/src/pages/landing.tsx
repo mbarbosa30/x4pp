@@ -67,16 +67,24 @@ export default function Landing() {
     
     setIsLoggingIn(true);
     try {
-      // Smart routing: use existing query data to avoid redundant login call
+      // Check if user already has an active session
+      if (currentUser) {
+        console.log('[Landing] Active session found, going to dashboard...');
+        setLocation('/app');
+        setIsLoggingIn(false);
+        return;
+      }
+      
+      // No active session - check if user is registered
       if (userByWallet) {
-        // User is already registered - just login to establish session
-        console.log('[Landing] User registered, logging in...');
+        // User is registered but no session - login to establish session
+        console.log('[Landing] User registered but no session, logging in...');
         await login();
         // Invalidate to ensure fresh data on dashboard
         queryClient.invalidateQueries({ queryKey: ['userByWallet', address.toLowerCase()] });
         setLocation('/app');
       } else {
-        // User not registered - go straight to registration
+        // User not registered - go to registration
         console.log('[Landing] User not registered, redirecting to register...');
         setLocation('/register');
       }
