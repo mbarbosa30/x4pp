@@ -4,6 +4,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { WalletProvider } from "@/providers/WalletProvider";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 import Landing from "@/pages/landing";
 import Home from "@/pages/home";
 import Send from "@/pages/send";
@@ -19,16 +20,44 @@ import NotFound from "@/pages/not-found";
 function Router() {
   return (
     <Switch>
+      {/* Public routes */}
       <Route path="/" component={Landing} />
-      <Route path="/app" component={Home} />
       <Route path="/send" component={Send} />
       <Route path="/register" component={Register} />
-      <Route path="/profile" component={Profile} />
-      <Route path="/inbox" component={InboxPending} />
-      <Route path="/inbox/accepted" component={InboxAccepted} />
-      <Route path="/outbox" component={Outbox} />
-      <Route path="/admin" component={AdminDashboard} />
       <Route path="/:identifier" component={PublicMessage} />
+      
+      {/* Protected routes - require authentication */}
+      <Route path="/app">
+        <ProtectedRoute>
+          <Home />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/profile">
+        <ProtectedRoute>
+          <Profile />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/inbox">
+        <ProtectedRoute>
+          <InboxPending />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/inbox/accepted">
+        <ProtectedRoute>
+          <InboxAccepted />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/outbox">
+        <ProtectedRoute>
+          <Outbox />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/admin">
+        <ProtectedRoute>
+          <AdminDashboard />
+        </ProtectedRoute>
+      </Route>
+      
       <Route component={NotFound} />
     </Switch>
   );
