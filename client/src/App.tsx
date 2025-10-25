@@ -20,11 +20,10 @@ import NotFound from "@/pages/not-found";
 function Router() {
   return (
     <Switch>
-      {/* Public routes */}
+      {/* Public routes - specific paths first */}
       <Route path="/" component={Landing} />
       <Route path="/send" component={Send} />
       <Route path="/register" component={Register} />
-      <Route path="/:identifier" component={PublicMessage} />
       
       {/* Protected routes - require authentication */}
       <Route path="/app">
@@ -57,6 +56,9 @@ function Router() {
           <AdminDashboard />
         </ProtectedRoute>
       </Route>
+      
+      {/* Catch-all for usernames and wallet addresses - must be last */}
+      <Route path="/:identifier" component={PublicMessage} />
       
       <Route component={NotFound} />
     </Switch>
