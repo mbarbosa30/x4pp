@@ -13,6 +13,9 @@ import { Badge } from "@/components/ui/badge";
 import { useWallet } from "@/providers/WalletProvider";
 import { useAuth } from "@/hooks/useAuth";
 import { signTransferAuthorization, parseSignature } from "@/lib/eip-3009";
+import { createPublicClient, http } from "viem";
+import { normalize } from "viem/ens";
+import { mainnet } from "viem/chains";
 
 interface ComposeMessageProps {
   isVerified: boolean;
@@ -72,6 +75,11 @@ export default function ComposeMessage({ isVerified, onSend, initialRecipient }:
   const [isLoadingPriceGuide, setIsLoadingPriceGuide] = useState(false);
   const [hasShownResumeToast, setHasShownResumeToast] = useState(false);
   
+  // ENS resolution state
+  const [ensResolvedAddress, setEnsResolvedAddress] = useState<string | null>(null);
+  const [isResolvingEns, setIsResolvingEns] = useState(false);
+  const [ensError, setEnsError] = useState<string | null>(null);
+  
   // Ref to track latest paymentRequirements value (not affected by closure)
   const paymentRequirementsRef = useRef(paymentRequirements);
   
@@ -87,6 +95,67 @@ export default function ComposeMessage({ isVerified, onSend, initialRecipient }:
       setRecipient(initialRecipient);
     }
   }, [initialRecipient]);
+
+  // ENS resolution effect
+  useEffect(() => {
+    const resolveEns = async () => {
+      const trimmedRecipient = recipient.trim();
+      
+      // Reset ENS state if recipient is empty or doesn't contain .eth
+      if (!trimmedRecipient || !trimmedRecipient.includes('.eth')) {
+        setEnsResolvedAddress(null);
+        setEnsError(null);
+        setIsResolvingEns(false);
+        return;
+      }
+
+      // Check if it's an ENS name (contains .eth and not a wallet address)
+      const isEnsName = trimmedRecipient.includes('.eth') && 
+                        !(trimmedRecipient.startsWith('0x') && trimmedRecipient.length === 42);
+      
+      if (!isEnsName) {
+        setEnsResolvedAddress(null);
+        setEnsError(null);
+        setIsResolvingEns(false);
+        return;
+      }
+
+      setIsResolvingEns(true);
+      setEnsError(null);
+
+      try {
+        // Create a public client for Ethereum mainnet (where ENS lives)
+        const publicClient = createPublicClient({
+          chain: mainnet,
+          transport: http(),
+        });
+
+        // Normalize and resolve the ENS name
+        const normalizedName = normalize(trimmedRecipient);
+        const address = await publicClient.getEnsAddress({
+          name: normalizedName,
+        });
+
+        if (address) {
+          setEnsResolvedAddress(address.toLowerCase());
+          setEnsError(null);
+        } else {
+          setEnsResolvedAddress(null);
+          setEnsError('ENS name not found');
+        }
+      } catch (error) {
+        console.error('ENS resolution error:', error);
+        setEnsResolvedAddress(null);
+        setEnsError('Failed to resolve ENS name');
+      } finally {
+        setIsResolvingEns(false);
+      }
+    };
+
+    // Debounce ENS resolution
+    const debounceTimer = setTimeout(resolveEns, 500);
+    return () => clearTimeout(debounceTimer);
+  }, [recipient]);
 
   // Auto-complete payment if we have a stored signature
   useEffect(() => {
@@ -204,14 +273,28 @@ export default function ComposeMessage({ isVerified, onSend, initialRecipient }:
       return;
     }
 
+    // Don't fetch while ENS is resolving
+    if (isResolvingEns) {
+      return;
+    }
+
+    // Don't fetch if there's an ENS error
+    if (ensError) {
+      setPriceGuide(null);
+      return;
+    }
+
     const abortController = new AbortController();
     
     const fetchPriceGuide = async () => {
       setIsLoadingPriceGuide(true);
       try {
+        // Use resolved ENS address if available, otherwise use the original recipient
+        const effectiveRecipient = ensResolvedAddress || recipient;
+        
         // Auto-detect if input is wallet address or username
-        const isWalletAddress = recipient.startsWith('0x') && recipient.length === 42;
-        const identifier = isWalletAddress ? recipient : recipient.replace(/^@/, '');
+        const isWalletAddress = effectiveRecipient.startsWith('0x') && effectiveRecipient.length === 42;
+        const identifier = isWalletAddress ? effectiveRecipient : effectiveRecipient.replace(/^@/, '');
         
         const response = await fetch(`/api/price-guide/${identifier}`, {
           signal: abortController.signal,
@@ -259,7 +342,7 @@ export default function ComposeMessage({ isVerified, onSend, initialRecipient }:
       clearTimeout(debounceTimer);
       abortController.abort();
     };
-  }, [recipient, isConnected, paymentRequirements]);
+  }, [recipient, isConnected, paymentRequirements, ensResolvedAddress, isResolvingEns, ensError]);
 
   const handleSend = async () => {
     if (!recipient || !message) {
@@ -303,15 +386,38 @@ export default function ComposeMessage({ isVerified, onSend, initialRecipient }:
       return;
     }
 
+    // Check for ENS resolution errors
+    if (ensError) {
+      toast({
+        title: "Invalid recipient",
+        description: ensError,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Don't allow sending while ENS is resolving
+    if (isResolvingEns) {
+      toast({
+        title: "Resolving ENS name",
+        description: "Please wait while we resolve the ENS name",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
       // Step 1: Generate commit payload with bid amount and expiration
+      // Use resolved ENS address if available, otherwise use the original recipient
+      const effectiveRecipient = ensResolvedAddress || recipient;
+      
       // Auto-detect if recipient is wallet address or username
-      const isWalletAddress = recipient.startsWith('0x') && recipient.length === 42;
+      const isWalletAddress = effectiveRecipient.startsWith('0x') && effectiveRecipient.length === 42;
       const commitRequest = {
-        recipientUsername: isWalletAddress ? undefined : recipient.replace(/^@/, ''),
-        recipientWallet: isWalletAddress ? recipient.toLowerCase() : undefined,
+        recipientUsername: isWalletAddress ? undefined : effectiveRecipient.replace(/^@/, ''),
+        recipientWallet: isWalletAddress ? effectiveRecipient.toLowerCase() : undefined,
         senderWallet: walletAddress, // Use connected wallet address as identifier
         senderName: walletAddress, // Use wallet address as sender identifier (formatted on display)
         content: message,
@@ -389,6 +495,8 @@ export default function ComposeMessage({ isVerified, onSend, initialRecipient }:
         setPaymentRequirements(null);
         setPriceGuide(null);
         setOriginalCommitPayload(null);
+        setEnsResolvedAddress(null);
+        setEnsError(null);
 
         if (onSend) {
           onSend(recipient, message, includeReplyBounty ? replyBounty : 0);
@@ -531,6 +639,8 @@ export default function ComposeMessage({ isVerified, onSend, initialRecipient }:
         setPaymentRequirements(null);
         setPriceGuide(null);
         setOriginalCommitPayload(null);
+        setEnsResolvedAddress(null);
+        setEnsError(null);
 
         if (onSend) {
           onSend(recipient, message, includeReplyBounty ? replyBounty : 0);
@@ -562,18 +672,44 @@ export default function ComposeMessage({ isVerified, onSend, initialRecipient }:
     <Card className="p-4 sm:p-6">
       <div className="space-y-6">
         <div>
-          <Label htmlFor="recipient">Recipient (username or wallet)</Label>
+          <Label htmlFor="recipient">Recipient (username, wallet, or ENS)</Label>
           <Input
             id="recipient"
-            placeholder="username or 0x..."
+            placeholder="username, 0x..., or vitalik.eth"
             value={recipient}
             onChange={(e) => setRecipient(e.target.value)}
             className="mt-2"
             data-testid="input-recipient"
           />
           <div className="text-xs text-muted-foreground mt-1">
-            Enter a username (e.g., alice) or wallet address (e.g., 0x1234...)
+            Enter a username (e.g., alice), wallet address (e.g., 0x1234...), or ENS name (e.g., vitalik.eth)
           </div>
+          
+          {/* ENS Resolution Feedback */}
+          {isResolvingEns && (
+            <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+              <div className="animate-spin h-3 w-3 border-2 border-primary border-t-transparent rounded-full" />
+              Resolving ENS name...
+            </div>
+          )}
+          
+          {ensResolvedAddress && !isResolvingEns && (
+            <div className="mt-2 p-2 bg-primary/10 border border-primary/20 rounded text-xs" data-testid="text-ens-resolved">
+              <div className="flex items-center gap-2 text-primary font-medium mb-1">
+                <span>✓</span>
+                <span>ENS Resolved</span>
+              </div>
+              <div className="font-mono text-muted-foreground break-all">
+                {ensResolvedAddress}
+              </div>
+            </div>
+          )}
+          
+          {ensError && !isResolvingEns && (
+            <div className="mt-2 p-2 bg-destructive/10 border border-destructive/20 rounded text-xs text-destructive" data-testid="text-ens-error">
+              {ensError}
+            </div>
+          )}
         </div>
 
         <div>
