@@ -130,8 +130,10 @@ export default function ComposeMessage({ isVerified, onSend, initialRecipient }:
           transport: http(),
         });
 
-        // Normalize and resolve the ENS name
+        // Normalize the ENS name first (required by viem)
         const normalizedName = normalize(trimmedRecipient);
+        
+        // Resolve the ENS name to an address
         const address = await publicClient.getEnsAddress({
           name: normalizedName,
         });
