@@ -20,20 +20,23 @@ import {
 import ThemeToggle from "@/components/ThemeToggle";
 import { ConnectButton } from "@/components/ConnectButton";
 import { useWallet } from "@/providers/WalletProvider";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Landing() {
   const { isConnected, address, login } = useWallet();
   const [, setLocation] = useLocation();
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const { toast } = useToast();
   
-  const { data: currentUser } = useQuery({
+  const { data: currentUser, error: currentUserError } = useQuery({
     queryKey: ['/api/auth/me'],
     enabled: isConnected,
+    refetchOnWindowFocus: true, // Refetch when user returns to tab
   });
 
   // Check if connected wallet is registered
   // Dynamic key auto-invalidates on address change - no manual effect needed
-  const { data: userByWallet, isLoading: isCheckingWallet } = useQuery({
+  const { data: userByWallet, isLoading: isCheckingWallet, error: walletCheckError } = useQuery({
     queryKey: ['userByWallet', address?.toLowerCase()],
     queryFn: async () => {
       if (!address) return null;
@@ -45,26 +48,46 @@ export default function Landing() {
     retry: false,
     staleTime: 5 * 60 * 1000, // 5 min cache - user data is semi-static
     gcTime: 10 * 60 * 1000, // Keep in memory 10 min
+    refetchOnWindowFocus: true, // Refetch when user returns to tab
   });
+
+  // Show error toast if wallet check fails
+  useEffect(() => {
+    if (walletCheckError) {
+      toast({
+        title: "Connection issue",
+        description: "Failed to check wallet status. Please try again.",
+        variant: "destructive",
+      });
+    }
+  }, [walletCheckError, toast]);
 
   const handleGoToDashboard = async () => {
     if (!isConnected || !address) return;
     
     setIsLoggingIn(true);
     try {
-      // Attempt login - backend will verify if user exists
-      const authResult = await login();
-      
-      if (authResult?.user) {
-        // User exists and is logged in - go to dashboard
+      // Smart routing: use existing query data to avoid redundant login call
+      if (userByWallet) {
+        // User is already registered - just login to establish session
+        console.log('[Landing] User registered, logging in...');
+        await login();
+        // Invalidate to ensure fresh data on dashboard
+        queryClient.invalidateQueries({ queryKey: ['userByWallet', address.toLowerCase()] });
         setLocation('/app');
       } else {
-        // User doesn't exist - go to registration
+        // User not registered - go straight to registration
+        console.log('[Landing] User not registered, redirecting to register...');
         setLocation('/register');
       }
     } catch (error) {
       console.error('Login failed:', error);
-      // If login fails, send to registration
+      toast({
+        title: "Login failed",
+        description: "There was a problem logging in. Please try again.",
+        variant: "destructive",
+      });
+      // If login fails, send to registration as fallback
       setLocation('/register');
     } finally {
       setIsLoggingIn(false);
