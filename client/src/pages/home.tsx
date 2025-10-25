@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useWallet } from "@/providers/WalletProvider";
 import InboxPending from "@/pages/inbox-pending";
 import InboxAccepted from "@/pages/inbox-accepted";
+import InboxArchived from "@/pages/inbox-archived";
 import Outbox from "@/pages/outbox";
 import SettingsPanel from "@/components/SettingsPanel";
 import { Link, useLocation } from "wouter";
@@ -166,12 +167,18 @@ export default function Home() {
                   <TabsTrigger value="accepted" data-testid="tab-inbox-accepted">
                     Accepted
                   </TabsTrigger>
+                  <TabsTrigger value="archived" data-testid="tab-inbox-archived">
+                    Archive
+                  </TabsTrigger>
                 </TabsList>
                 <TabsContent value="pending" className="mt-0">
                   <InboxPending />
                 </TabsContent>
                 <TabsContent value="accepted" className="mt-0">
                   <InboxAccepted />
+                </TabsContent>
+                <TabsContent value="archived" className="mt-0">
+                  <InboxArchived />
                 </TabsContent>
               </Tabs>
             </TabsContent>

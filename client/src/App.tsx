@@ -14,6 +14,7 @@ import Profile from "@/pages/profile";
 import Register from "@/pages/register";
 import InboxPending from "@/pages/inbox-pending";
 import InboxAccepted from "@/pages/inbox-accepted";
+import InboxArchived from "@/pages/inbox-archived";
 import Outbox from "@/pages/outbox";
 import NotFound from "@/pages/not-found";
 
@@ -44,6 +45,11 @@ function Router() {
       <Route path="/inbox/accepted">
         <ProtectedRoute>
           <InboxAccepted />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/inbox/archived">
+        <ProtectedRoute>
+          <InboxArchived />
         </ProtectedRoute>
       </Route>
       <Route path="/outbox">
