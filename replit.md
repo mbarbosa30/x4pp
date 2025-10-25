@@ -2,9 +2,18 @@
 
 ## Overview
 
-x4pp is a peer-to-peer messaging application featuring an "attention market" where message sending uses wallet-based routing with open bidding. Recipients set minimum bid prices, while senders (who don't need accounts) can send messages to either usernames or wallet addresses. The platform uses an open bidding model where senders place bids, and recipients manually accept or decline messages. Key features include EIP-3009 deferred payment authorization (funds remain in sender's wallet until acceptance), automatic bid expiry, and a privacy-preserving reputation system.
+x4pp is a peer-to-peer messaging application featuring an "attention market" where message sending uses wallet-based routing with open bidding. Recipients set minimum bid prices, while senders (who don't need accounts) can send messages to usernames, wallet addresses, or ENS domains. The platform uses an open bidding model where senders place bids, and recipients manually accept or decline messages. Key features include EIP-3009 deferred payment authorization (funds remain in sender's wallet until acceptance), automatic bid expiry, and a privacy-preserving reputation system.
 
 ## Recent Changes
+
+**October 25, 2025:**
+- **ENS Domain Support**: Added ENS resolution for message recipients - users can now send messages to ENS names like "vitalik.eth" which are automatically resolved to wallet addresses using viem on Ethereum mainnet
+- **Authentication Flow Improvements** (full polish based on analysis):
+  - Optimized landing page to use query data intelligently - no longer makes redundant login calls
+  - Added error toasts for query failures to provide better user feedback
+  - Implemented route guards with ProtectedRoute component - all authenticated pages now require valid session
+  - Added refetchOnWindowFocus to critical auth queries for better reconnect reliability
+  - Enhanced cache invalidation strategy to prevent stale data on wallet reconnect
 
 **October 24, 2025:**
 - Fixed mobile bid input bug: Users can now properly delete and edit bid amounts when sending messages (dual-state pattern with string display and number validation)
@@ -36,10 +45,11 @@ The PostgreSQL database schema includes tables for:
 - `blocks`: User blocking.
 
 **Message Routing:** All messages are routed by wallet address. Messages can be sent to:
-1. **Registered users** (via username or wallet address): Uses user's configured minimum bid price
+1. **Registered users** (via username, wallet address, or ENS domain): Uses user's configured minimum bid price
 2. **Unregistered wallet addresses**: Uses platform default minimum bid ($0.10, defined in `shared/constants.ts`)
+3. **ENS domains**: Automatically resolved to wallet addresses on Ethereum mainnet using viem's ENS resolver
 
-Messages sent to an unregistered wallet will appear in the inbox when that wallet registers.
+Messages sent to an unregistered wallet will appear in the inbox when that wallet registers. ENS resolution happens client-side with normalized names (supports mixed-case like "Vitalik.eth").
 
 Payment architecture uses EIP-3009 `transferWithAuthorization` for deferred USDC payments on Celo mainnet, with server-side validation of EIP-712 signatures. Funds remain in the sender's wallet until the recipient accepts the message, at which point settlement occurs on-chain.
 
