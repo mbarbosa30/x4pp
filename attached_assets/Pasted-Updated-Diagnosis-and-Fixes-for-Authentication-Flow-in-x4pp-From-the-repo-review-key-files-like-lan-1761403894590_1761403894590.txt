@@ -1,0 +1,61 @@
+Updated Diagnosis and Fixes for Authentication Flow in x4pp
+From the repo review (key files like landing.tsx and ConnectButton.tsx are accessible; WalletProvider.tsx and users.ts have limited content but patterns match standard wagmi setups), the core issue is a mismatch in how the flow handles registered vs. authenticated states. Specifically:
+	•	The app connects the wallet successfully (no break there—ConnectButton calls connect() fine).
+	•	But for registered wallets, it calls login() unnecessarily (even if session exists), and if backend /api/auth/login assumes new users or fails (e.g., duplicate session attempt or error on existing user), it catches the error and redirects to /register—treating registered users as new.
+	•	userByWallet query (from /api/users/wallet/:address) correctly identifies registered (returns user), but login() overrides, and currentUser (/api/auth/me) is fetched but unused for decisions—missing opportunity to skip if already authenticated.
+	•	On reconnect, if session cookie is stale/expired, it doesn’t refresh—leading to “assuming new user”.
+This isn’t a connection break (as fixed earlier), but a logic flaw in post-connect handling: Over-reliance on login() without checking if session is active, plus no error feedback (just silent redirect).
+Quick Fixes
+	1	Use currentUser to Skip Login for Authenticated Users (landing.tsx):
+	◦	If currentUser exists (session active), direct to /app without login().
+	◦	Only call login() if registered but not authenticated (e.g., new session). Updated code:
+	2	const handleGoToDashboard = async () => {
+	3	  if (!isConnected || !address || isCheckingWallet) return;
+	4	
+	5	  if (currentUser) {  // Already authenticated—skip login
+	6	    setLocation('/app');
+	7	    return;
+	8	  }
+	9	
+	10	  if (!userByWallet) {
+	11	    setLocation('/register');
+	12	    return;
+	13	  }
+	14	
+	15	  setIsLoggingIn(true);
+	16	  try {
+	17	    await login();  // Only for registered but not logged in
+	18	    queryClient.invalidateQueries({ queryKey: ['userByWallet'] });
+	19	    setTimeout(() => setLocation('/app'), 500);
+	20	  } catch (error) {
+	21	    console.error('Login failed:', error);
+	22	    toast.error('Login error—try reconnecting');  // Add toast for UX
+	23	    setLocation('/register');  // Fallback
+	24	  } finally {
+	25	    setIsLoggingIn(false);
+	26	  }
+	27	};
+	28	
+	29	Invalidate on Disconnect (WalletProvider.tsx, inferred):
+	◦	Add to clear stale sessions: useEffect(() => {
+	◦	  if (!isConnected) {
+	◦	    queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
+	◦	    queryClient.invalidateQueries({ queryKey: ['userByWallet'] });
+	◦	  }
+	◦	}, [isConnected]);
+	◦	
+	30	Backend: Make /api/auth/login Idempotent (users.ts):
+	◦	If user exists, refresh session instead of error. Example: app.post('/api/auth/login', async (req, res) => {
+	◦	  const { address } = req.body;  // From client
+	◦	  const user = await db.users.findByWallet(address);
+	◦	  if (user) {
+	◦	    req.session.userId = user.id;  // Refresh/set session
+	◦	    return res.json({ user });
+	◦	  }
+	◦	  res.status(404).json({ error: 'User not found' });
+	◦	});
+	◦	
+	31	Add Guards & Feedback:
+	◦	In /app route: Fetch /api/auth/me; if null, redirect to landing.
+	◦	Add loading/error states in landing: if (isCheckingWallet) return ; if (walletError) return ;
+This ensures registered users with active sessions go straight to dashboard, and login only runs when needed. Test reconnect: Disconnect → Reconnect → Should use query to detect registered and skip to /app if session valid. If still issues, check backend logs for login errors.
