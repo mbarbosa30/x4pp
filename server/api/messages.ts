@@ -211,6 +211,74 @@ router.get("/pending", async (req, res) => {
 });
 
 /**
+ * GET /api/messages/archived
+ * Get expired and declined messages for the authenticated user
+ */
+router.get("/archived", async (req, res) => {
+  try {
+    const userId = (req as any).session?.userId;
+    if (!userId) {
+      return res.status(401).json({ error: "Authentication required" });
+    }
+
+    // Get user's wallet address for message routing
+    const [user] = await db
+      .select({
+        walletAddress: users.walletAddress,
+      })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+
+    if (!user || !user.walletAddress) {
+      return res.status(404).json({ error: "User not found or wallet not configured" });
+    }
+
+    // Get expired and declined messages with sender info
+    const archivedMessages = await db
+      .select({
+        id: messages.id,
+        senderWallet: messages.senderWallet,
+        recipientWallet: messages.recipientWallet,
+        senderName: messages.senderName,
+        senderEmail: messages.senderEmail,
+        content: messages.content,
+        bidUsd: messages.bidUsd,
+        replyBounty: messages.replyBounty,
+        status: messages.status,
+        sentAt: messages.sentAt,
+        expiresAt: messages.expiresAt,
+        declinedAt: messages.declinedAt,
+        // Sender profile info (if registered)
+        senderDisplayName: users.displayName,
+        senderUsername: users.username,
+      })
+      .from(messages)
+      .leftJoin(users, sql`lower(${users.walletAddress}) = ${messages.senderWallet}`)
+      .where(
+        and(
+          eq(messages.recipientWallet, user.walletAddress.toLowerCase()),
+          sql`${messages.status} IN ('expired', 'declined')`
+        )
+      )
+      .orderBy(desc(messages.sentAt));
+
+    // Serialize timestamps to ISO strings for proper frontend handling
+    const serializedMessages = archivedMessages.map(msg => ({
+      ...msg,
+      sentAt: msg.sentAt ? msg.sentAt.toISOString() : null,
+      expiresAt: msg.expiresAt ? msg.expiresAt.toISOString() : null,
+      declinedAt: msg.declinedAt?.toISOString() || null,
+    }));
+
+    res.json(serializedMessages);
+  } catch (error) {
+    console.error("Error fetching archived messages:", error);
+    res.status(500).json({ error: "Failed to fetch archived messages" });
+  }
+});
+
+/**
  * POST /api/messages/:messageId/accept
  * Accept a pending message and settle the escrowed payment
  */
