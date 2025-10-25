@@ -11,6 +11,8 @@ x4pp is a peer-to-peer messaging application featuring an "attention market" whe
   - Fixed session cookies not working in production by using `REPLIT_DEPLOYMENT=1` instead of `NODE_ENV` to detect production
   - Updated `server/session.ts` to properly set `secure: true` for HTTPS cookies in published deployments
   - Updated `server/config/celo.ts` for consistency with production detection
+  - Added `app.set('trust proxy', 1)` to Express - required for Replit deployments behind proxy to properly detect HTTPS
+  - Added cache-control headers for API endpoints to prevent stale authentication state
   - Sessions now persist correctly in both development and production environments
 - **Archive Page**: Added `/inbox/archived` route and tab for viewing expired and declined messages
 - **Wallet Connection Stability** (critical fixes):

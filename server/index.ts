@@ -6,8 +6,24 @@ import { sessionMiddleware } from "./session";
 import { initializeDatabase } from "./db-init";
 
 const app = express();
+
+// Trust proxy - required for Replit deployments (app runs behind proxy)
+// This allows Express to trust X-Forwarded-* headers and properly detect HTTPS
+app.set('trust proxy', 1);
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+
+// Add cache-control headers for API endpoints to prevent stale auth state
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api')) {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+  }
+  next();
+});
+
 app.use(sessionMiddleware);
 
 // Start refund monitoring service

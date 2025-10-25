@@ -1,0 +1,165 @@
+The 401 means your **messages API is being called without a valid Express session cookie**. Nothing points to a bad SQL/query—this is an auth propagation issue across your front-end → API boundary.
+
+Here’s a tight, high-signal checklist to fix it fast.
+
+# What’s going wrong (most likely)
+
+1. **Requests don’t send cookies**
+   Your dashboard’s fetch/React-Query calls to `/api/messages…` are missing `credentials: 'include'`. Result: the server sees no session → `401 Authentication required`.
+
+2. **Server isn’t allowing credentialed CORS**
+   If the app runs at `https://x4pp.xyz` and API is same/or another origin, you must enable CORS with `credentials:true` and a specific `origin` (not `*`).
+
+3. **Session cookie not set / not sticking**
+   Common causes:
+
+   * Missing `app.set('trust proxy', 1)` behind a proxy → `secure` cookie never sets.
+   * Cookie flags incorrect for your environment (e.g., `secure:true` over HTTP in dev).
+   * `SameSite` too strict for your flow (use `'lax'`).
+
+4. **Routing renders dashboard without confirming session**
+   If you navigate to `/app` off wallet state instead of `/api/session/me`, you’ll “look logged in” but API calls return 401.
+
+Repo entry confirms the project and structure, but GitHub’s UI is flaky when opening nested files from here. The patterns below match your stack and symptoms. ([GitHub][1])
+
+---
+
+# Fix it (copy-paste patterns)
+
+## 1) Frontend: always send cookies
+
+Create a tiny fetch wrapper and use it everywhere (incl. messages list):
+
+```ts
+// client/src/lib/api.ts
+export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const res = await fetch(path, {
+    credentials: 'include',        // <- critical
+    headers: { 'Content-Type': 'application/json', ...(init.headers || {}) },
+    ...init,
+  });
+  if (res.status === 401) throw new Error('AUTH_401');
+  if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
+  return res.json();
+}
+```
+
+In your dashboard query:
+
+```ts
+useQuery({
+  queryKey: ['messages'],
+  queryFn: () => api('/api/messages'),
+});
+```
+
+## 2) Server: credentialed CORS + proxy trust
+
+```ts
+// server/index.ts
+import cors from 'cors';
+app.set('trust proxy', 1); // if behind Vercel/Render/Nginx
+
+app.use(cors({
+  origin: ['https://x4pp.xyz','http://localhost:5173'], // exact origins only
+  credentials: true,
+}));
+
+// session
+app.use(session({
+  secret: process.env.SESSION_SECRET!,
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production', // true on prod over https
+    maxAge: 1000 * 60 * 60 * 24 * 7,
+  },
+}));
+```
+
+## 3) Server: cache headers for auth endpoints
+
+```ts
+app.use((_, res, next) => {
+  res.set('Cache-Control','no-store, no-cache, must-revalidate, private');
+  res.set('Pragma','no-cache');
+  res.set('Expires','0');
+  res.set('Vary','Cookie, Authorization');
+  next();
+});
+```
+
+## 4) One source of truth for “logged in”
+
+On the client, gate navigation on `/api/session/me` (not wallet state):
+
+```ts
+// client/src/hooks/useAuth.ts
+export function useAuth(){
+  return useQuery({
+    queryKey: ['me'],
+    queryFn: () => api('/api/session/me'),
+    retry: false,
+    staleTime: 30_000,
+    refetchOnReconnect: 'always',
+  });
+}
+```
+
+Router guards:
+
+```tsx
+function RequireAuth({ children }){
+  const { data: me, isLoading } = useAuth();
+  if (isLoading) return null;                 // splash
+  return me ? children : <Navigate to="/login?returnTo=/app" replace />;
+}
+```
+
+## 5) Wallet ↔ session sync
+
+Wallet connect ≠ app login. After you connect the wallet (Reown/wagmi), make sure you actually **log in** (whatever your server expects—signature check or a wallet→user lookup) so the session cookie is set. On **disconnect**, log out and clear `['me']`:
+
+```ts
+const { isConnected } = useAccount();
+useEffect(() => {
+  if (!isConnected) {
+    fetch('/api/session/logout', { method:'POST', credentials:'include' });
+    queryClient.removeQueries({ queryKey: ['me'] });
+  }
+}, [isConnected]);
+```
+
+---
+
+# Quick “find the bug” steps in DevTools
+
+1. Open **Network** → reload dashboard:
+
+   * Do you see **`/api/session/me` = 200** and a `Set-Cookie` previously?
+   * For the failing **`/api/messages`** request, check **Request Headers** → is `Cookie` present? If not, you forgot `credentials:'include'`.
+
+2. In **Application → Cookies**, confirm the session cookie exists, has `Secure` (on https), `SameSite=Lax`, and the path/domain match your app.
+
+3. On the server logs, add middleware above messages route:
+
+```ts
+app.use('/api/messages', (req,_res,next) => {
+  console.log('messages auth check', { hasSession: Boolean(req.session?.userId) });
+  next();
+});
+```
+
+If `hasSession:false`, it’s a cookie propagation problem (points to #1–#2 above).
+
+---
+
+# Likely root cause for your exact error
+
+Your dashboard React Query call to load messages is not sending the session cookie, so the messages route (correctly) returns `401 {"error":"Authentication required"}`. Fixing **credentials**, **CORS**, **trust proxy**, and **routing guards** resolves it.
+
+If you want, paste the messages route handler and your dashboard query snippet, and I’ll mark the exact lines to change.
+
+[1]: https://github.com/mbarbosa30/x4pp "GitHub - mbarbosa30/x4pp: x402 powered messaging app. Attention Markets, Simplified."
